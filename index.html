@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FACESCAN — Reconhecimento Facial</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      FACE<span>SCAN</span>
+    </div>
+    <div class="status-bar">
+      <div class="status-item">
+        <div class="dot red" id="cam-dot"></div>
+        <span id="cam-status-text">CÂMERA OFFLINE</span>
+      </div>
+      <div class="status-item">
+        <div class="dot red" id="api-dot"></div>
+        <span id="api-status-text">GEMINI OFFLINE</span>
+      </div>
+      <div class="status-item">
+        <div class="dot"></div>
+        <span>SISTEMA ATIVO</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- TELA DE CONFIGURAÇÃO -->
+  <div id="setup-screen">
+    <div class="setup-card">
+      <div class="setup-title">INICIALIZAR SISTEMA</div>
+      <p class="setup-subtitle">
+        A chave API do Gemini é lida do arquivo <code>config/.env</code>.
+        Edite-o com sua chave antes de abrir esta página.<br />
+        Obtenha gratuitamente em
+        <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a>.
+      </p>
+
+      <div class="field-label">▸ STATUS DA CHAVE</div>
+      <div id="key-status-display" class="key-status-box">Verificando config…</div>
+      <div id="key-error" class="error-msg"></div>
+
+      <button class="cyber-btn" id="start-btn" onclick="App.init()">
+        ◈ INICIAR SISTEMA
+      </button>
+
+      <p class="hint">
+        Modelo: <strong>gemini-2.0-flash</strong> — Google Search Grounding ativado<br />
+        <span class="hint-warn">⚠ A chave nunca sai do seu dispositivo.</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- TELA PRINCIPAL -->
+  <div id="app-screen">
+    <div class="app-grid">
+
+      <div class="camera-panel">
+        <div class="panel-header">
+          <div class="panel-title">◈ VISOR PRINCIPAL</div>
+          <div class="panel-tag" id="scan-tag">● DETECÇÃO ATIVA</div>
+        </div>
+
+        <div class="camera-wrapper" id="cam-wrapper">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas-overlay"></canvas>
+          <div class="scan-line"></div>
+          <div class="cam-corners">
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+          </div>
+          <div class="cam-status" id="cam-status-overlay">◉ AO VIVO — AGUARDANDO ROSTO</div>
+          <div class="face-count-badge" id="face-badge">0 ROSTO(S)</div>
+        </div>
+
+        <div class="progress-bar" id="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div class="scan-btn-wrapper">
+          <button class="scan-btn" id="scan-btn" onclick="App.scanFace()">
+            ⊕ ESCANEAR E IDENTIFICAR
+          </button>
+          <button class="reset-btn" onclick="App.resetSession()">⟳ RESET</button>
+        </div>
+      </div>
+
+      <div class="side-panel">
+        <div class="info-card">
+          <div class="card-title">◈ ALVO CAPTURADO</div>
+          <div class="no-target" id="no-target-msg">
+            <div class="no-target-icon">◎</div>
+            <span>AGUARDANDO CAPTURA</span>
+          </div>
+          <img id="target-preview" alt="Captura" />
+        </div>
+
+        <div class="info-card">
+          <div class="card-title">◈ PARÂMETROS</div>
+          <div class="stats-grid">
+            <div>
+              <div class="stat-label">DETECÇÕES</div>
+              <div class="stat-value green" id="stat-detections">0</div>
+            </div>
+            <div>
+              <div class="stat-label">ANÁLISES</div>
+              <div class="stat-value cyan" id="stat-analyses">0</div>
+            </div>
+            <div>
+              <div class="stat-label">ROSTOS/FRAME</div>
+              <div class="stat-value yellow" id="stat-faces">0</div>
+            </div>
+            <div>
+              <div class="stat-label">STATUS</div>
+              <div class="stat-value green small" id="stat-status">PRONTO</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card flex-grow">
+          <div class="card-title">◈ LOG DO SISTEMA</div>
+          <div class="log-area" id="log-area">
+            <div class="log-line">
+              <span class="log-time">[INIT]</span>
+              <span class="log-text ok">Sistema carregado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-title">ANALISANDO...</div>
+    <div class="loading-steps" id="loading-steps">
+      <div class="loading-step" id="step1">◦ Capturando frame...</div>
+      <div class="loading-step" id="step2">◦ Enviando para Gemini Vision...</div>
+      <div class="loading-step" id="step3">◦ Ativando Google Search...</div>
+      <div class="loading-step" id="step4">◦ Compilando dados...</div>
+      <div class="loading-step" id="step5">◦ Gerando perfil...</div>
+    </div>
+  </div>
+
+  <!-- POPUP DE RESULTADO -->
+  <div id="result-popup">
+    <div class="popup-card">
+      <div class="popup-header">
+        <div class="popup-title">
+          PERFIL IDENTIFICADO
+          <span class="popup-title-tag">RESULTADO</span>
+        </div>
+        <button class="close-btn" onclick="App.closePopup()">✕</button>
+      </div>
+
+      <div class="popup-body">
+        <div class="popup-photo-col">
+          <div class="photo-frame">
+            <img id="popup-photo" class="popup-photo" alt="Rosto capturado" />
+          </div>
+          <div class="confidence-bar">
+            <div class="conf-label">
+              <span>CONFIANÇA</span>
+              <span id="conf-val">—</span>
+            </div>
+            <div class="conf-track">
+              <div class="conf-fill" id="conf-fill"></div>
+            </div>
+          </div>
+          <div class="popup-meta" id="popup-meta">—</div>
+        </div>
+
+        <div class="popup-data-col">
+          <div class="data-section">
+            <div class="data-section-title">IDENTIFICAÇÃO</div>
+            <div class="person-name" id="popup-name">DESCONHECIDO</div>
+            <div class="person-desc" id="popup-desc">Nenhuma descrição disponível.</div>
+            <div class="tags-row" id="popup-tags"></div>
+          </div>
+          <div class="data-section">
+            <div class="data-section-title">DADOS ENCONTRADOS</div>
+            <div class="info-grid" id="popup-info-grid"></div>
+          </div>
+          <div class="data-section" id="summary-section">
+            <div class="data-section-title">RESUMO</div>
+            <div class="summary-text" id="popup-summary">—</div>
+          </div>
+          <div class="data-section" id="sources-section">
+            <div class="data-section-title">FONTES</div>
+            <div class="sources-list" id="popup-sources"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-footer">
+        <span id="popup-timestamp">—</span>
+        <span>POWERED BY GEMINI + GOOGLE SEARCH</span>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="capture-canvas"></canvas>
+
+  <script src="config/config.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,306 @@
+:root {
+  --cyan:       #00f5ff;
+  --green:      #00ff88;
+  --red:        #ff3366;
+  --yellow:     #ffcc00;
+  --bg:         #020810;
+  --bg2:        #060d1a;
+  --panel:      rgba(0, 245, 255, 0.04);
+  --border:     rgba(0, 245, 255, 0.18);
+  --glow:       0 0 20px rgba(0, 245, 255, 0.4);
+  --glow-green: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background:  var(--bg);
+  color:       var(--cyan);
+  font-family: 'Rajdhani', sans-serif;
+  min-height:  100vh;
+  overflow-x:  hidden;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(0,245,255,0.03) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0,255,136,0.03) 0%, transparent 60%),
+    linear-gradient(180deg, #020810 0%, #060d1a 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+code { font-family: 'Share Tech Mono', monospace; font-size: 0.8em; color: var(--yellow); }
+
+/* Animações */
+@keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.5} }
+@keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0.2} }
+@keyframes scanMove { 0%{top:0} 100%{top:100%} }
+@keyframes spin     { to{transform:rotate(360deg)} }
+@keyframes fadeIn   { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+@keyframes flicker  { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:0.4} 94%{opacity:1} 97%{opacity:0.6} 98%{opacity:1} }
+@keyframes shimmer  { 0%{filter:brightness(1)} 50%{filter:brightness(1.5)} 100%{filter:brightness(1)} }
+
+/* Header */
+header {
+  position: relative; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 36px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(2,8,16,0.9);
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900;
+  letter-spacing: 4px; text-shadow: var(--glow);
+  display: flex; align-items: center; gap: 12px;
+}
+.logo span   { color: var(--green); }
+.logo-icon   { font-size: 1.4rem; animation: pulse 2s infinite; }
+
+.status-bar  { display: flex; gap: 24px; font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; }
+.status-item { display: flex; align-items: center; gap: 6px; opacity: 0.7; }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: var(--glow-green);
+  animation: blink 1.5s infinite;
+}
+.dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+/* Setup */
+#setup-screen {
+  position: relative; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: calc(100vh - 70px); padding: 40px 20px;
+}
+
+.setup-card {
+  border: 1px solid var(--border); background: var(--panel);
+  backdrop-filter: blur(20px); padding: 48px;
+  max-width: 520px; width: 100%; position: relative;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+}
+.setup-card::before {
+  content: ''; position: absolute; inset: 0;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  background: linear-gradient(135deg, rgba(0,245,255,0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.setup-title    { font-family: 'Orbitron', monospace; font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; text-shadow: var(--glow); }
+.setup-subtitle { color: rgba(0,245,255,0.5); font-size: 0.9rem; margin-bottom: 36px; line-height: 1.6; }
+.setup-subtitle a { color: var(--green); text-decoration: none; }
+.setup-subtitle a:hover { text-decoration: underline; }
+
+.field-label    { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; color: rgba(0,245,255,0.6); margin-bottom: 8px; }
+
+.key-status-box {
+  width: 100%; background: rgba(0,0,0,0.5);
+  border: 1px solid var(--border); color: var(--yellow);
+  font-family: 'Share Tech Mono', monospace; font-size: 0.82rem;
+  padding: 14px 16px; margin-bottom: 24px;
+}
+
+.cyber-btn {
+  width: 100%; background: transparent;
+  border: 1px solid var(--cyan); color: var(--cyan);
+  font-family: 'Orbitron', monospace; font-size: 0.85rem; font-weight: 700;
+  letter-spacing: 3px; padding: 16px; cursor: pointer;
+  position: relative; overflow: hidden; transition: all 0.3s; text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+.cyber-btn::before { content: ''; position: absolute; inset: 0; background: var(--cyan); transform: translateX(-100%); transition: transform 0.3s; z-index: -1; }
+.cyber-btn:hover          { color: var(--bg); box-shadow: var(--glow); }
+.cyber-btn:hover::before  { transform: translateX(0); }
+.cyber-btn:disabled       { opacity: 0.4; cursor: not-allowed; }
+.cyber-btn:disabled:hover::before { transform: translateX(-100%); }
+.cyber-btn:disabled:hover { color: var(--cyan); box-shadow: none; }
+
+.hint       { margin-top: 16px; font-size: 0.78rem; color: rgba(0,245,255,0.4); text-align: center; line-height: 1.6; }
+.hint-warn  { color: rgba(255,204,0,0.5); }
+
+.error-msg {
+  color: var(--red); font-family: 'Share Tech Mono', monospace; font-size: 0.7rem;
+  padding: 10px 14px; border: 1px solid rgba(255,51,102,0.3);
+  background: rgba(255,51,102,0.05); margin-bottom: 16px; display: none;
+}
+
+/* App screen */
+#app-screen { display: none; position: relative; z-index: 10; padding: 24px 32px; }
+
+.app-grid {
+  display: grid; grid-template-columns: 1fr 320px;
+  gap: 24px; max-width: 1200px; margin: 0 auto;
+}
+
+.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.panel-title  { font-family: 'Orbitron', monospace; font-size: 0.75rem; letter-spacing: 3px; color: rgba(0,245,255,0.7); }
+.panel-tag    { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: var(--green); background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2); padding: 3px 10px; }
+
+.camera-wrapper { position: relative; border: 1px solid var(--border); background: #000; overflow: hidden; aspect-ratio: 4/3; max-height: 520px; }
+
+#video          { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+#canvas-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transform: scaleX(-1); }
+
+.scan-line {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: scanMove 3s linear infinite;
+  pointer-events: none; opacity: 0; transition: opacity 0.3s;
+}
+.scanning .scan-line { opacity: 1; }
+
+.cam-corners { position: absolute; inset: 0; pointer-events: none; }
+.cam-corner  { position: absolute; width: 20px; height: 20px; border-color: var(--cyan); border-style: solid; opacity: 0.7; }
+.cam-corner.tl { top:10px;    left:10px;  border-width: 2px 0 0 2px; }
+.cam-corner.tr { top:10px;    right:10px; border-width: 2px 2px 0 0; }
+.cam-corner.bl { bottom:10px; left:10px;  border-width: 0 0 2px 2px; }
+.cam-corner.br { bottom:10px; right:10px; border-width: 0 2px 2px 0; }
+
+.cam-status       { position: absolute; bottom:12px; left:12px; font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: var(--green); background: rgba(0,0,0,0.7); padding: 4px 10px; border: 1px solid rgba(0,255,136,0.2); }
+.face-count-badge { position: absolute; top:12px; right:12px; font-family: 'Orbitron', monospace; font-size: 0.7rem; color: var(--yellow); background: rgba(0,0,0,0.8); border: 1px solid rgba(255,204,0,0.3); padding: 4px 12px; display: none; }
+
+.progress-bar  { height: 3px; background: rgba(0,245,255,0.1); margin-top: 8px; overflow: hidden; display: none; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--green)); width: 0%; transition: width 0.3s; animation: shimmer 1.5s infinite; }
+
+.scan-btn-wrapper { margin-top: 16px; display: flex; gap: 12px; }
+
+.scan-btn {
+  flex: 1; background: transparent; border: 1px solid var(--green); color: var(--green);
+  font-family: 'Orbitron', monospace; font-size: 0.8rem; font-weight: 700;
+  letter-spacing: 2px; padding: 14px; cursor: pointer; transition: all 0.3s;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  position: relative; overflow: hidden;
+}
+.scan-btn::before { content: ''; position: absolute; inset: 0; background: var(--green); transform: translateX(-100%); transition: transform 0.3s; z-index: -1; }
+.scan-btn:hover          { color: #000; box-shadow: var(--glow-green); }
+.scan-btn:hover::before  { transform: translateX(0); }
+.scan-btn:disabled       { opacity: 0.4; cursor: not-allowed; }
+.scan-btn:disabled:hover::before { transform: translateX(-100%); }
+.scan-btn:disabled:hover { color: var(--green); box-shadow: none; }
+
+.reset-btn { background: transparent; border: 1px solid rgba(255,51,102,0.5); color: rgba(255,51,102,0.7); font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; padding: 14px 20px; cursor: pointer; transition: all 0.3s; }
+.reset-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,51,102,0.08); }
+
+/* Side panel */
+.side-panel  { display: flex; flex-direction: column; gap: 16px; }
+.info-card   { border: 1px solid var(--border); background: var(--panel); padding: 20px; position: relative; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); }
+.info-card.flex-grow { flex: 1; }
+
+.card-title  { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; color: rgba(0,245,255,0.5); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+#target-preview { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--border); display: none; filter: brightness(0.9) contrast(1.1); }
+.no-target      { width: 100%; aspect-ratio: 1; border: 1px dashed rgba(0,245,255,0.15); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: rgba(0,245,255,0.25); font-size: 0.75rem; font-family: 'Share Tech Mono', monospace; }
+.no-target-icon { font-size: 2rem; opacity: 0.3; }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-label { font-family: 'Share Tech Mono', monospace; font-size: 0.58rem; color: rgba(0,245,255,0.4); margin-bottom: 3px; }
+.stat-value { font-family: 'Orbitron', monospace; font-size: 1.2rem; }
+.stat-value.green  { color: var(--green);  }
+.stat-value.cyan   { color: var(--cyan);   }
+.stat-value.yellow { color: var(--yellow); }
+.stat-value.small  { font-size: 0.8rem;    }
+
+.log-area { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 12px; font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: rgba(0,245,255,0.6); min-height: 120px; max-height: 180px; overflow-y: auto; line-height: 1.8; }
+.log-area::-webkit-scrollbar       { width: 3px; }
+.log-area::-webkit-scrollbar-thumb { background: var(--border); }
+.log-line      { display: flex; gap: 8px; }
+.log-time      { color: rgba(0,245,255,0.3); }
+.log-text.ok   { color: var(--green);  }
+.log-text.warn { color: var(--yellow); }
+.log-text.err  { color: var(--red);    }
+
+/* Loading */
+#loading-overlay { display: none; position: fixed; inset: 0; z-index: 999; background: rgba(2,8,16,0.85); backdrop-filter: blur(8px); align-items: center; justify-content: center; flex-direction: column; gap: 24px; }
+#loading-overlay.active { display: flex; }
+
+.loading-spinner { width: 80px; height: 80px; border: 2px solid rgba(0,245,255,0.1); border-top-color: var(--cyan); border-radius: 50%; animation: spin 1s linear infinite; position: relative; }
+.loading-spinner::before { content: ''; position: absolute; inset: 6px; border: 2px solid rgba(0,255,136,0.1); border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite reverse; }
+.loading-text  { font-family: 'Orbitron', monospace; font-size: 0.8rem; letter-spacing: 3px; color: var(--cyan); text-shadow: var(--glow); animation: flicker 2s infinite; }
+.loading-steps { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: rgba(0,245,255,0.5); text-align: center; line-height: 2; }
+.loading-step.done   { color: var(--green);  }
+.loading-step.active { color: var(--yellow); }
+
+/* Popup */
+#result-popup { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(2,8,16,0.92); backdrop-filter: blur(8px); align-items: center; justify-content: center; padding: 20px; }
+#result-popup.active { display: flex; animation: fadeIn 0.4s ease; }
+
+.popup-card { max-width: 780px; width: 100%; max-height: 88vh; overflow-y: auto; background: #050d1a; border: 1px solid var(--border); position: relative; clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 24px 100%, 0 calc(100% - 24px)); box-shadow: 0 0 60px rgba(0,245,255,0.15), 0 0 120px rgba(0,0,0,0.8); }
+.popup-card::-webkit-scrollbar       { width: 4px; }
+.popup-card::-webkit-scrollbar-thumb { background: var(--border); }
+
+.popup-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #050d1a; z-index: 5; }
+.popup-title  { font-family: 'Orbitron', monospace; font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-shadow: var(--glow); display: flex; align-items: center; gap: 12px; }
+.popup-title-tag { font-size: 0.6rem; color: var(--green); background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.2); padding: 3px 10px; letter-spacing: 2px; animation: blink 2s infinite; }
+
+.close-btn { background: none; border: 1px solid rgba(255,51,102,0.4); color: rgba(255,51,102,0.7); width: 36px; height: 36px; cursor: pointer; font-size: 1rem; transition: all 0.3s; font-family: 'Share Tech Mono', monospace; display: flex; align-items: center; justify-content: center; }
+.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,51,102,0.1); box-shadow: 0 0 12px rgba(255,51,102,0.3); }
+
+.popup-body          { display: grid; grid-template-columns: 200px 1fr; }
+.popup-photo-col     { padding: 24px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.photo-frame         { position: relative; display: inline-block; }
+.photo-frame::before { content: ''; position: absolute; top:-4px; left:-4px; width:16px; height:16px; border-color: var(--cyan); border-style: solid; border-width: 2px 0 0 2px; opacity: 0.8; }
+.photo-frame::after  { content: ''; position: absolute; bottom:-4px; right:-4px; width:16px; height:16px; border-color: var(--cyan); border-style: solid; border-width: 0 2px 2px 0; opacity: 0.8; }
+
+.popup-photo   { width: 160px; height: 160px; object-fit: cover; border: 2px solid var(--border); filter: brightness(0.95) contrast(1.05); display: block; }
+
+.confidence-bar { width: 100%; }
+.conf-label     { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: rgba(0,245,255,0.5); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.conf-track     { height: 4px; background: rgba(0,245,255,0.1); width: 100%; }
+.conf-fill      { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--green)); box-shadow: var(--glow); transition: width 1s ease; }
+
+.popup-meta     { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: rgba(0,245,255,0.4); text-align: center; line-height: 1.8; }
+.popup-data-col { padding: 24px 28px; }
+.data-section   { margin-bottom: 24px; }
+
+.data-section-title { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 3px; color: rgba(0,245,255,0.4); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.data-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.person-name { font-family: 'Orbitron', monospace; font-size: 1.5rem; font-weight: 700; color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.3); margin-bottom: 4px; }
+.person-desc { color: rgba(0,245,255,0.6); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px; }
+
+.tags-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.tag        { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; padding: 4px 12px; border: 1px solid rgba(0,245,255,0.2); color: rgba(0,245,255,0.7); background: rgba(0,245,255,0.05); }
+.tag.green  { border-color: rgba(0,255,136,0.3);  color: var(--green);  background: rgba(0,255,136,0.05);  }
+.tag.yellow { border-color: rgba(255,204,0,0.3);  color: var(--yellow); background: rgba(255,204,0,0.05);  }
+.tag.red    { border-color: rgba(255,51,102,0.3); color: var(--red);    background: rgba(255,51,102,0.05); }
+
+.info-grid       { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.info-item       { background: rgba(0,0,0,0.3); border: 1px solid var(--border); padding: 12px 14px; }
+.info-item-label { font-family: 'Share Tech Mono', monospace; font-size: 0.58rem; color: rgba(0,245,255,0.4); letter-spacing: 1.5px; margin-bottom: 4px; }
+.info-item-value { font-size: 0.9rem; font-weight: 600; color: #e0f0ff; }
+
+.summary-text { font-size: 0.875rem; color: rgba(255,255,255,0.75); line-height: 1.8; background: rgba(0,0,0,0.3); border-left: 2px solid var(--cyan); padding: 16px 20px; border-radius: 0 4px 4px 0; }
+
+.sources-list { display: flex; flex-direction: column; gap: 8px; }
+.source-item  { display: flex; align-items: center; gap: 10px; font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: rgba(0,245,255,0.5); padding: 8px 12px; border: 1px solid rgba(0,245,255,0.08); background: rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s; text-decoration: none; }
+.source-item:hover { border-color: var(--border); color: var(--cyan); background: rgba(0,245,255,0.05); }
+.source-dot   { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+
+.popup-footer { padding: 16px 28px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: rgba(0,245,255,0.35); }
+
+#capture-canvas { display: none; }
+
+@media (max-width: 900px) {
+  .app-grid { grid-template-columns: 1fr; }
+  header    { padding: 14px 20px; }
+  .status-bar { display: none; }
+  #app-screen { padding: 16px; }
+}
+@media (max-width: 600px) {
+  .popup-body      { grid-template-columns: 1fr; }
+  .popup-photo-col { border-right: none; border-bottom: 1px solid var(--border); }
+  .info-grid       { grid-template-columns: 1fr; }
+  .popup-data-col  { padding: 20px 16px; }
+}
