@@ -18,6 +18,9 @@ const App = (() => {
     btn.textContent = "◉ CONECTANDO...";
     hideError();
 
+    state.apiKey = ENV.GEMINI_API_KEY;
+    state.model  = ENV.GEMINI_MODEL || "gemini-2.0-flash";
+
     try { await testApiKey(); }
     catch (err) {
       showError("Falha na conexão com Gemini: " + err.message);
@@ -215,7 +218,6 @@ Retorne SOMENTE JSON válido, sem markdown:
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }],
-          tools: [{ google_search: {} }],
           generationConfig: { maxOutputTokens: 2000, temperature: 0.2 },
         }),
       }
@@ -392,26 +394,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("start-btn");
 
   if (typeof ENV === "undefined" || !ENV.GEMINI_API_KEY) {
-    box.textContent = "⚠ ENV não encontrado — verifique config/.env";
+    box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
     box.style.color = "var(--red)"; btn.disabled = true; return;
   }
   if (ENV.GEMINI_API_KEY === "SUA_CHAVE_AQUI" || ENV.GEMINI_API_KEY.length < 20) {
-    box.textContent = "⚠ Chave não configurada — edite config/.env";
+    box.textContent = "⚠ Chave não configurada — edite config/config.js";
     box.style.color = "var(--yellow)"; btn.disabled = true; return;
   }
 
-  // Injeta a key no estado interno via init (ao clicar no botão)
   const masked = ENV.GEMINI_API_KEY.slice(0,6) + "••••••••" + ENV.GEMINI_API_KEY.slice(-4);
   box.textContent = "✓ Chave detectada (" + masked + ")";
   box.style.color = "var(--green)";
-
-  // Disponibiliza a key para o módulo
-  App._setKey = (k, m) => { /* exposto internamente via closure */ };
-
-  // Patch: injeta antes do init rodar
-  const _origInit = App.init;
-  App.init = async function() {
-    // lê do ENV diretamente dentro do módulo via closure — já está configurado
-    return _origInit();
-  };
 });
