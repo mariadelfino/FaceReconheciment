@@ -3,7 +3,7 @@
 const App = (() => {
 
   const state = {
-    apiKey: "", model: "gemini-3.1-pro-preview",
+    apiKey: "", model: "google/gemini-2.0-flash-exp:free",
     videoStream: null, faceDetector: null,
     detectionCount: 0, analysisCount: 0,
     lastCapture: null,
@@ -18,17 +18,17 @@ const App = (() => {
     btn.textContent = "◉ CONECTANDO...";
     hideError();
 
-    state.apiKey = ENV.GEMINI_API_KEY;
-    state.model  = ENV.GEMINI_MODEL || "gemini-3.1-pro-preview",
+    state.apiKey = ENV.OPENROUTER_API_KEY;
+    state.model  = ENV.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
 
     try { await testApiKey(); }
     catch (err) {
-      showError("Falha na conexão com Gemini: " + err.message);
+      showError("Falha na conexão com OpenRouter: " + err.message);
       btn.disabled = false; btn.textContent = "◈ INICIAR SISTEMA"; return;
     }
 
     setDot("api-dot", true);
-    $("api-status-text").textContent = "GEMINI ONLINE";
+    $("api-status-text").textContent = "OPENROUTER ONLINE";
 
     try { await startCamera(); }
     catch (err) {
@@ -180,48 +180,62 @@ const App = (() => {
     $("stat-status").textContent = "PRONTO";
   }
 
-  /* ── Gemini API ───────────────────────────────────────────── */
+  /* ── OpenRouter API ───────────────────────────────────────── */
   async function analyzeWithGemini(base64) {
     setLoadingStep(1); await delay(300);
     setLoadingStep(2);
 
-    const prompt = `Você é um sistema avançado de análise de identidade visual.
+    const prompt = `Você é um sistema avançado de análise de identidade visual e comportamental.
 
-Analise a imagem e:
-1. Identifique a pessoa (se for figura pública: celebridade, político, atleta, empresário).
-2. Use o Google Search para buscar informações atualizadas sobre ela.
-3. Se for pessoa comum/desconhecida, descreva características físicas.
+Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
-Retorne SOMENTE JSON válido, sem markdown:
 {
-  "identified": true,
-  "name": "Nome completo",
-  "confidence": "Alta",
-  "confidence_pct": 85,
-  "occupation": "Profissão",
-  "nationality": "Nacionalidade",
-  "born": "Data ou estimativa",
-  "known_for": "Motivo de notoriedade",
-  "description": "2-3 frases descritivas",
-  "tags": ["tag1","tag2","tag3"],
-  "summary": "Parágrafo completo com biografia e conquistas",
-  "data_points": [{"label":"CAMPO","value":"Valor"}],
-  "sources": [{"title":"Título","url":"https://..."}],
-  "physical_description": "Características físicas visíveis"
+  "web_info": {
+    "identified": true,
+    "confidence": "Alta",
+    "confidence_pct": 85,
+    "name": "Nome completo ou Desconhecido",
+    "occupation": "Profissão ou traço",
+    "nationality": "Nacionalidade ou traço",
+    "born": "Data de nascimento ou estimativa ou traço",
+    "known_for": "Motivo de notoriedade ou traço",
+    "summary": "Breve biografia ou indicação de que não há dados públicos identificáveis",
+    "tags": ["tag1", "tag2", "tag3"]
+  },
+  "status": {
+    "humor": "Estado emocional aparente ex Calmo Cansado Animado Neutro Estressado",
+    "expressao": "Descrição da expressão facial",
+    "caracteristicas": "Traços físicos visíveis cabelo olhos pele idade estimada",
+    "ambiente": "Ambiente ao fundo ex Quarto Escritório Área externa Fundo neutro",
+    "iluminacao": "Tipo de iluminação ex Natural Artificial Baixa Boa iluminação",
+    "postura": "Postura e enquadramento ex Centralizado De lado Inclinado",
+    "tags": ["tag1", "tag2", "tag3"]
+  }
 }`;
 
     setLoadingStep(3);
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`,
-      {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }],
-          generationConfig: { maxOutputTokens: 2000, temperature: 0.2 },
-        }),
-      }
-    );
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.apiKey}`,
+        "HTTP-Referer": window.location.href,
+        "X-Title": "FaceScan",
+      },
+      body: JSON.stringify({
+        model: state.model,
+        max_tokens: 2000,
+        temperature: 0.2,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+          ],
+        }],
+      }),
+    });
 
     setLoadingStep(4);
 
@@ -233,19 +247,12 @@ Retorne SOMENTE JSON válido, sem markdown:
     const data = await res.json();
     setLoadingStep(5);
 
-    let text = "";
-    for (const p of (data.candidates?.[0]?.content?.parts || [])) if (p.text) text += p.text;
+    const text = data.choices?.[0]?.message?.content || "";
     if (!text) throw new Error("Resposta vazia do modelo");
 
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("Formato de resposta inválido");
     const parsed = JSON.parse(match[0]);
-
-    const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    if (chunks.length) {
-      parsed.sources = chunks.filter(c => c.web?.uri)
-        .map(c => ({ title: c.web.title || "Fonte web", url: c.web.uri })).slice(0, 5);
-    }
 
     await delay(200);
     return parsed;
@@ -254,49 +261,65 @@ Retorne SOMENTE JSON válido, sem markdown:
   /* ── Popup ────────────────────────────────────────────────── */
   function renderPopup(data, imageData) {
     hideLoading();
-    $("popup-photo").src             = imageData;
-    $("popup-name").textContent      = data.name         || "Desconhecido";
-    $("popup-desc").textContent      = data.known_for    || data.physical_description || "—";
-    $("popup-summary").textContent   = data.summary      || "—";
+    const wi = data.web_info || {};
+    const st = data.status   || {};
 
-    const pct = data.confidence_pct || (data.confidence === "Alta" ? 88 : data.confidence === "Média" ? 60 : 35);
+    $("popup-photo").src = imageData;
+
+    // Confiança
+    const pct = wi.confidence_pct || (wi.confidence === "Alta" ? 88 : wi.confidence === "Média" ? 60 : 35);
     $("conf-val").textContent = pct + "%";
     setTimeout(() => ($("conf-fill").style.width = pct + "%"), 100);
 
     $("popup-meta").innerHTML =
-      escHtml(data.occupation||"—") + "<br>" + escHtml(data.nationality||"—") + "<br>" + escHtml(data.born||"—");
+      escHtml(wi.occupation||"—") + "<br>" + escHtml(wi.nationality||"—") + "<br>" + escHtml(wi.born||"—");
 
-    const tagsEl = $("popup-tags");
-    tagsEl.innerHTML = "";
-    const tags = [...(data.tags || [])];
-    if (data.confidence) tags.unshift(data.confidence + " CONF.");
-    tags.slice(0, 6).forEach((t, i) => {
-      const cls = i === 0 ? (data.confidence==="Alta"?"green":data.confidence==="Baixa"?"red":"yellow") : "";
-      tagsEl.innerHTML += `<span class="tag ${cls}">${escHtml(t)}</span>`;
+    // ── BLOCO WEB INFO ──
+    $("popup-name").textContent    = wi.name    || "Desconhecido";
+    $("popup-summary").textContent = wi.summary || "—";
+
+    const wiTags = $("popup-tags");
+    wiTags.innerHTML = "";
+    const tags1 = [...(wi.tags || [])];
+    if (wi.confidence) tags1.unshift(wi.confidence + " CONF.");
+    tags1.slice(0,6).forEach((t, i) => {
+      const cls = i===0 ? (wi.confidence==="Alta"?"green":wi.confidence==="Baixa"?"red":"yellow") : "";
+      wiTags.innerHTML += `<span class="tag ${cls}">${escHtml(t)}</span>`;
     });
 
-    const grid = $("popup-info-grid");
-    grid.innerHTML = "";
-    const pts = [...(data.data_points || [])];
-    if (!pts.length) {
-      if (data.occupation)  pts.push({ label:"PROFISSÃO",     value: data.occupation  });
-      if (data.nationality) pts.push({ label:"NACIONALIDADE", value: data.nationality });
-      if (data.born)        pts.push({ label:"NASCIMENTO",    value: data.born        });
-      pts.push({ label:"IDENTIFICADO", value: data.identified ? "SIM" : "NÃO" });
-    }
-    pts.slice(0,6).forEach(dp => {
-      grid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
+    const wiGrid = $("popup-info-grid");
+    wiGrid.innerHTML = "";
+    [
+      { label:"IDENTIFICADO", value: wi.identified ? "SIM" : "NÃO" },
+      { label:"PROFISSÃO",    value: wi.occupation  || "—" },
+      { label:"NACIONALIDADE",value: wi.nationality || "—" },
+      { label:"NASCIMENTO",   value: wi.born        || "—" },
+      { label:"CONHECIDO POR",value: wi.known_for   || "—" },
+    ].forEach(dp => {
+      wiGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
     });
 
-    const srcEl = $("popup-sources"), srcSect = $("sources-section");
-    srcEl.innerHTML = "";
-    if (data.sources?.length) {
-      data.sources.slice(0,5).forEach(s => {
-        srcEl.innerHTML += `<a class="source-item" href="${escHtml(s.url)}" target="_blank" rel="noopener"><span class="source-dot"></span>${escHtml(s.title)}</a>`;
-      });
-      srcSect.style.display = "block";
-    } else { srcSect.style.display = "none"; }
+    // ── BLOCO STATUS ──
+    const stGrid = $("popup-status-grid");
+    stGrid.innerHTML = "";
+    [
+      { label:"😄 HUMOR",       value: st.humor          || "—" },
+      { label:"😐 EXPRESSÃO",   value: st.expressao      || "—" },
+      { label:"👤 CARACTERÍSTICAS", value: st.caracteristicas || "—" },
+      { label:"🏠 AMBIENTE",    value: st.ambiente       || "—" },
+      { label:"💡 ILUMINAÇÃO",  value: st.iluminacao     || "—" },
+      { label:"🧍 POSTURA",     value: st.postura        || "—" },
+    ].forEach(dp => {
+      stGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
+    });
 
+    const stTags = $("popup-status-tags");
+    stTags.innerHTML = "";
+    (st.tags || []).slice(0,6).forEach(t => {
+      stTags.innerHTML += `<span class="tag yellow">${escHtml(t)}</span>`;
+    });
+
+    $("sources-section").style.display = "none";
     $("popup-timestamp").textContent = "ANÁLISE: " + new Date().toLocaleString("pt-BR");
     $("result-popup").classList.add("active");
   }
@@ -361,11 +384,20 @@ Retorne SOMENTE JSON válido, sem markdown:
 
   /* ── Utils ────────────────────────────────────────────────── */
   function testApiKey() {
-    return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`,
-      { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ contents:[{parts:[{text:"OK"}]}], generationConfig:{maxOutputTokens:5} }) }
-    ).then(async r => { if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error?.message||"HTTP "+r.status); } });
+    return fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.apiKey}`,
+        "HTTP-Referer": window.location.href,
+        "X-Title": "FaceScan",
+      },
+      body: JSON.stringify({
+        model: state.model,
+        max_tokens: 5,
+        messages: [{ role: "user", content: "OK" }],
+      }),
+    }).then(async r => { if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error?.message||"HTTP "+r.status); } });
   }
 
   function setDot(id, online) {
@@ -393,16 +425,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const box = document.getElementById("key-status-display");
   const btn = document.getElementById("start-btn");
 
-  if (typeof ENV === "undefined" || !ENV.GEMINI_API_KEY) {
+  if (typeof ENV === "undefined" || !ENV.OPENROUTER_API_KEY) {
     box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
     box.style.color = "var(--red)"; btn.disabled = true; return;
   }
-  if (ENV.GEMINI_API_KEY === "SUA_CHAVE_AQUI" || ENV.GEMINI_API_KEY.length < 20) {
+  if (ENV.OPENROUTER_API_KEY === "SUA_CHAVE_AQUI" || ENV.OPENROUTER_API_KEY.length < 20) {
     box.textContent = "⚠ Chave não configurada — edite config/config.js";
     box.style.color = "var(--yellow)"; btn.disabled = true; return;
   }
 
-  const masked = ENV.GEMINI_API_KEY.slice(0,6) + "••••••••" + ENV.GEMINI_API_KEY.slice(-4);
-  box.textContent = "✓ Chave detectada (" + masked + ")";
+  const masked = ENV.OPENROUTER_API_KEY.slice(0,6) + "••••••••" + ENV.OPENROUTER_API_KEY.slice(-4);
+  box.textContent = "✓ Chave OpenRouter detectada (" + masked + ")";
   box.style.color = "var(--green)";
 });

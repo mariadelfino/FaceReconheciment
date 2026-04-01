@@ -12,6 +12,16 @@
   />
 
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .popup-data-col { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+    .nicho-block { border: 1px solid rgba(0,245,255,0.2); border-radius: 6px; padding: 14px; background: rgba(0,245,255,0.03); }
+    .nicho-block.nicho-status { border-color: rgba(0,255,136,0.25); background: rgba(0,255,136,0.03); }
+    .nicho-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,245,255,0.15); }
+    .nicho-status .nicho-header { border-bottom-color: rgba(0,255,136,0.2); }
+    .nicho-icon { font-size: 16px; }
+    .nicho-title { font-family: "Orbitron", monospace; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--cyan); }
+    .nicho-status .nicho-title { color: var(--green); }
+  </style>
 </head>
 <body>
 
@@ -185,24 +195,32 @@
         </div>
 
         <div class="popup-data-col">
-          <div class="data-section">
-            <div class="data-section-title">IDENTIFICAÇÃO</div>
+
+          <!-- NICHO 1: DADOS NA WEB -->
+          <div class="nicho-block nicho-web">
+            <div class="nicho-header">
+              <span class="nicho-icon">🌐</span>
+              <span class="nicho-title">DADOS NA WEB</span>
+            </div>
             <div class="person-name" id="popup-name">DESCONHECIDO</div>
-            <div class="person-desc" id="popup-desc">Nenhuma descrição disponível.</div>
             <div class="tags-row" id="popup-tags"></div>
-          </div>
-          <div class="data-section">
-            <div class="data-section-title">DADOS ENCONTRADOS</div>
             <div class="info-grid" id="popup-info-grid"></div>
-          </div>
-          <div class="data-section" id="summary-section">
-            <div class="data-section-title">RESUMO</div>
             <div class="summary-text" id="popup-summary">—</div>
+            <div id="sources-section" style="display:none">
+              <div class="sources-list" id="popup-sources"></div>
+            </div>
           </div>
-          <div class="data-section" id="sources-section">
-            <div class="data-section-title">FONTES</div>
-            <div class="sources-list" id="popup-sources"></div>
+
+          <!-- NICHO 2: STATUS -->
+          <div class="nicho-block nicho-status">
+            <div class="nicho-header">
+              <span class="nicho-icon">📡</span>
+              <span class="nicho-title">STATUS ATUAL</span>
+            </div>
+            <div class="info-grid" id="popup-status-grid"></div>
+            <div class="tags-row" id="popup-status-tags"></div>
           </div>
+
         </div>
       </div>
 
