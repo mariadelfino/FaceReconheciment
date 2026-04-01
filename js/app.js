@@ -3,7 +3,7 @@
 const App = (() => {
 
   const state = {
-    apiKey: "", model: "gemini-2.0-flash",
+    apiKey: "", model: "gemini-3.1-pro-preview",
     videoStream: null, faceDetector: null,
     detectionCount: 0, analysisCount: 0,
     lastCapture: null,
@@ -19,7 +19,7 @@ const App = (() => {
     hideError();
 
     state.apiKey = ENV.GEMINI_API_KEY;
-    state.model  = ENV.GEMINI_MODEL || "gemini-2.0-flash";
+    state.model  = ENV.GEMINI_MODEL || "gemini-3.1-pro-preview",
 
     try { await testApiKey(); }
     catch (err) {
@@ -362,7 +362,7 @@ Retorne SOMENTE JSON válido, sem markdown:
   /* ── Utils ────────────────────────────────────────────────── */
   function testApiKey() {
     return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${state.apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`,
       { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ contents:[{parts:[{text:"OK"}]}], generationConfig:{maxOutputTokens:5} }) }
     ).then(async r => { if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error?.message||"HTTP "+r.status); } });
