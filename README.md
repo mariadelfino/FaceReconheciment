@@ -164,18 +164,6 @@ Módulo IIFE que exporta quatro funções públicas para o HTML:
 | `App.resetSession()` | Botão "Reset" | Zera contadores e captura atual |
 | `App.closePopup()` | Botão ✕ / Esc / clique fora | Fecha o popup de resultado |
 
-### `config/config.js`
-```js
-const ENV = {
-  OPENROUTER_API_KEY: "sk-or-v1-...",   // Sua chave OpenRouter
-  OPENROUTER_MODEL:   "nvidia/nemotron-nano-12b-v2-vl:free",
-};
-Object.freeze(ENV);
-```
-
-> ⚠️ **Nunca suba este arquivo com sua chave real para repositórios públicos.** Adicione `config/config.js` ao `.gitignore`.
-
----
 
 ## Pré-requisitos
 
