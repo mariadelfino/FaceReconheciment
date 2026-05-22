@@ -21,6 +21,16 @@
     .nicho-icon { font-size: 16px; }
     .nicho-title { font-family: "Orbitron", monospace; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--cyan); }
     .nicho-status .nicho-title { color: var(--green); }
+    .nicho-azure { border-color: rgba(255,200,0,0.25); background: rgba(255,200,0,0.03); }
+    .nicho-azure .nicho-header { border-bottom-color: rgba(255,200,0,0.2); }
+    .nicho-azure .nicho-title { color: var(--yellow); }
+    .sources-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .source-item { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; background: rgba(0,245,255,0.05); border-radius: 4px; border: 1px solid rgba(0,245,255,0.1); }
+    .source-score { font-family: "Orbitron", monospace; font-size: 11px; color: var(--green); min-width: 36px; font-weight: 700; padding-top: 2px; }
+    .source-info { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+    .source-domain { font-size: 11px; color: var(--cyan); font-weight: 600; }
+    .source-url { font-size: 10px; color: rgba(255,255,255,0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+    .source-url:hover { color: var(--cyan); }
   </style>
 </head>
 <body>
@@ -37,7 +47,15 @@
       </div>
       <div class="status-item">
         <div class="dot red" id="api-dot"></div>
-        <span id="api-status-text">GEMINI OFFLINE</span>
+        <span id="api-status-text">GEMINI + SEARCH OFFLINE</span>
+      </div>
+      <div class="status-item">
+        <div class="dot red" id="azure-dot"></div>
+        <span id="azure-status-text">AZURE OFFLINE</span>
+      </div>
+      <div class="status-item">
+        <div class="dot red" id="facecheck-dot"></div>
+        <span id="facecheck-status-text">FACECHECK OFFLINE</span>
       </div>
       <div class="status-item">
         <div class="dot"></div>
@@ -51,14 +69,23 @@
     <div class="setup-card">
       <div class="setup-title">INICIALIZAR SISTEMA</div>
       <p class="setup-subtitle">
-        A chave API do Gemini é lida do arquivo <code>config/.env</code>.
-        Edite-o com sua chave antes de abrir esta página.<br />
-        Obtenha gratuitamente em
-        <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a>.
+        Configure suas chaves no arquivo <code>config/config.js</code> antes de iniciar.<br />
+        <strong>Gemini API</strong>: obtenha gratuitamente em
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>.<br />
+        <strong>Azure Face API</strong>: crie um recurso Face em
+        <a href="https://portal.azure.com" target="_blank">portal.azure.com</a>
+        (30.000 req/mês grátis).
       </p>
 
-      <div class="field-label">▸ STATUS DA CHAVE</div>
+      <div class="field-label">▸ STATUS GEMINI + GOOGLE SEARCH</div>
       <div id="key-status-display" class="key-status-box">Verificando config…</div>
+
+      <div class="field-label" style="margin-top:10px">▸ STATUS AZURE FACE API</div>
+      <div id="azure-status-display" class="key-status-box">Verificando config…</div>
+
+      <div class="field-label" style="margin-top:10px">▸ STATUS FACECHECK.ID</div>
+      <div id="facecheck-status-display" class="key-status-box">Verificando config…</div>
+
       <div id="key-error" class="error-msg"></div>
 
       <button class="cyber-btn" id="start-btn" onclick="App.init()">
@@ -66,8 +93,10 @@
       </button>
 
       <p class="hint">
-        Modelo: <strong>gemini-3.1-pro-preview,</strong> — Google Search Grounding ativado<br />
-        <span class="hint-warn">⚠ A chave nunca sai do seu dispositivo.</span>
+        Identificação: <strong>Gemini + Google Search</strong> — busca e monta o perfil em tempo real<br />
+        Busca reversa: <strong>FaceCheck.ID</strong> — encontra a pessoa na internet por foto<br />
+        Biometria: <strong>Azure Face API</strong> — emoção, idade, gênero e mais<br />
+        <span class="hint-warn">⚠ As chaves nunca saem do seu dispositivo.</span>
       </p>
     </div>
   </div>
@@ -159,8 +188,8 @@
     <div class="loading-text" id="loading-title">ANALISANDO...</div>
     <div class="loading-steps" id="loading-steps">
       <div class="loading-step" id="step1">◦ Capturando frame...</div>
-      <div class="loading-step" id="step2">◦ Enviando para Gemini Vision...</div>
-      <div class="loading-step" id="step3">◦ Ativando Google Search...</div>
+      <div class="loading-step" id="step2">◦ Buscando rosto na internet (FaceCheck + Azure)...</div>
+      <div class="loading-step" id="step3">◦ Pesquisando no Google com Gemini...</div>
       <div class="loading-step" id="step4">◦ Compilando dados...</div>
       <div class="loading-step" id="step5">◦ Gerando perfil...</div>
     </div>
@@ -207,6 +236,10 @@
             <div class="info-grid" id="popup-info-grid"></div>
             <div class="summary-text" id="popup-summary">—</div>
             <div id="sources-section" style="display:none">
+              <div class="nicho-header" style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,245,255,0.15)">
+                <span class="nicho-icon">🔍</span>
+                <span class="nicho-title">ENCONTRADO NA INTERNET</span>
+              </div>
               <div class="sources-list" id="popup-sources"></div>
             </div>
           </div>
@@ -221,12 +254,22 @@
             <div class="tags-row" id="popup-status-tags"></div>
           </div>
 
+          <!-- NICHO 3: AZURE BIOMETRIA -->
+          <div class="nicho-block nicho-azure" id="nicho-azure" style="display:none">
+            <div class="nicho-header">
+              <span class="nicho-icon">🔬</span>
+              <span class="nicho-title">BIOMETRIA — AZURE FACE</span>
+            </div>
+            <div class="info-grid" id="popup-azure-grid"></div>
+            <div class="tags-row" id="popup-azure-tags"></div>
+          </div>
+
         </div>
       </div>
 
       <div class="popup-footer">
         <span id="popup-timestamp">—</span>
-        <span>POWERED BY GEMINI + GOOGLE SEARCH</span>
+        <span>POWERED BY GEMINI + GOOGLE SEARCH + AZURE FACE + FACECHECK.ID</span>
       </div>
     </div>
   </div>

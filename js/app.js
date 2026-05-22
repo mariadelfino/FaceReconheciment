@@ -3,7 +3,9 @@
 const App = (() => {
 
   const state = {
-    apiKey: "", model: "google/gemini-2.0-flash-exp:free",
+    geminiKey: "",
+    azureFaceKey: "", azureFaceEndpoint: "",
+    faceCheckKey: "",
     videoStream: null, faceDetector: null,
     detectionCount: 0, analysisCount: 0,
     lastCapture: null,
@@ -18,17 +20,37 @@ const App = (() => {
     btn.textContent = "◉ CONECTANDO...";
     hideError();
 
-    state.apiKey = ENV.OPENROUTER_API_KEY;
-    state.model  = ENV.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
+    state.geminiKey         = ENV.GEMINI_API_KEY      || "";
+    state.azureFaceKey      = ENV.AZURE_FACE_KEY      || "";
+    state.azureFaceEndpoint = ENV.AZURE_FACE_ENDPOINT || "";
+    state.faceCheckKey      = ENV.FACECHECK_API_KEY   || "";
 
-    try { await testApiKey(); }
+    try { await testGeminiKey(); }
     catch (err) {
-      showError("Falha na conexão com OpenRouter: " + err.message);
+      showError("Falha na conexão com Gemini: " + err.message);
       btn.disabled = false; btn.textContent = "◈ INICIAR SISTEMA"; return;
     }
-
     setDot("api-dot", true);
-    $("api-status-text").textContent = "OPENROUTER ONLINE";
+    $("api-status-text").textContent = "GEMINI + GOOGLE SEARCH ONLINE";
+
+    if (state.azureFaceKey && state.azureFaceKey !== "SUA_CHAVE_AZURE_AQUI") {
+      try {
+        await testAzureKey();
+        setDot("azure-dot", true);
+        $("azure-status-text").textContent = "AZURE FACE ONLINE";
+        log("Azure Face API conectado", "ok");
+      } catch (err) {
+        setDot("azure-dot", false);
+        $("azure-status-text").textContent = "AZURE FACE ERRO";
+        log("Azure: " + err.message, "warn");
+      }
+    }
+
+    if (state.faceCheckKey && state.faceCheckKey !== "SUA_CHAVE_FACECHECK_AQUI") {
+      setDot("facecheck-dot", true);
+      $("facecheck-status-text").textContent = "FACECHECK ONLINE";
+      log("FaceCheck.ID configurado — busca reversa ativa", "ok");
+    }
 
     try { await startCamera(); }
     catch (err) {
@@ -119,22 +141,18 @@ const App = (() => {
     const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 333);
     ctx.save();
     ctx.globalAlpha = alpha;
-
     ctx.strokeStyle = `rgba(0,245,255,${0.7 + 0.3 * pulse})`;
     ctx.lineWidth = 1.5; ctx.setLineDash([8,4]);
     ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
-
     const cs = 20;
     ctx.strokeStyle = `rgba(0,255,136,${0.9 + 0.1 * pulse})`; ctx.lineWidth = 2.5;
     [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([px,py,dx,dy]) => {
       ctx.beginPath(); ctx.moveTo(px+dx*cs,py); ctx.lineTo(px,py); ctx.lineTo(px,py+dy*cs); ctx.stroke();
     });
-
     const cx = x+w/2, cy = y+h/2;
     ctx.strokeStyle = `rgba(0,245,255,${0.3*pulse})`; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(cx-15,cy); ctx.lineTo(cx+15,cy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx,cy-15); ctx.lineTo(cx,cy+15); ctx.stroke();
-
     ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(x, y-22, 120, 20);
     ctx.fillStyle = "rgba(0,245,255,0.9)"; ctx.font = '11px "Share Tech Mono", monospace';
     ctx.fillText("◈ " + label, x+6, y-7);
@@ -162,14 +180,41 @@ const App = (() => {
     $("no-target-msg").style.display  = "none";
 
     showLoading();
-    log("Frame capturado — enviando para análise", "ok");
+    log("Frame capturado — iniciando análise completa", "ok");
+
+    const b64 = imageData.split(",")[1];
+    setLoadingStep(1); await delay(200);
+    setLoadingStep(2);
 
     try {
-      const result = await analyzeWithGemini(imageData.split(",")[1]);
+      // Etapa 1: FaceCheck + Azure em paralelo
+      const [faceCheckRes, azureRes] = await Promise.allSettled([
+        searchWithFaceCheck(b64),
+        analyzeWithAzure(b64),
+      ]);
+
+      const faceItems = faceCheckRes.status === "fulfilled" ? faceCheckRes.value : null;
+      const azure     = azureRes.status     === "fulfilled" ? azureRes.value     : null;
+
+      if (faceItems && faceItems.length > 0)
+        log("FaceCheck: " + faceItems.length + " correspondência(s) encontrada(s)", "ok");
+      if (azure)
+        log("Azure: biometria real obtida", "ok");
+
+      // Etapa 2: Gemini com Google Search + contexto do FaceCheck
+      setLoadingStep(3);
+      log("Gemini pesquisando no Google...", "ok");
+
+      const geminiResult = await analyzeWithGeminiSearch(b64, faceItems);
+
+      setLoadingStep(4); await delay(200);
+      setLoadingStep(5); await delay(200);
+
       state.analysisCount++;
       $("stat-analyses").textContent = state.analysisCount;
-      renderPopup(result, imageData);
+      renderPopup(geminiResult, azure, faceItems, imageData);
       log("Análise concluída com sucesso", "ok");
+
     } catch (err) {
       hideLoading();
       log("Erro na análise: " + err.message, "err");
@@ -180,14 +225,37 @@ const App = (() => {
     $("stat-status").textContent = "PRONTO";
   }
 
-  /* ── OpenRouter API ───────────────────────────────────────── */
-  async function analyzeWithGemini(base64) {
-    setLoadingStep(1); await delay(300);
-    setLoadingStep(2);
+  /* ── Google Gemini API + Search Grounding ─────────────────── */
+  async function testGeminiKey() {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: "OK" }] }],
+        generationConfig: { maxOutputTokens: 5 },
+      }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error?.message || "HTTP " + res.status);
+    }
+  }
 
-    const prompt = `Você é um sistema avançado de análise de identidade visual e comportamental.
+  async function analyzeWithGeminiSearch(base64, faceItems) {
+    let webContext = "";
+    if (faceItems && faceItems.length > 0) {
+      const top = faceItems.slice(0, 5);
+      webContext = `\n\nO rosto foi encontrado nas seguintes páginas da internet:\n` +
+        top.map(item => `- ${item.url} (relevância: ${item.score}%)`).join("\n") +
+        `\n\nUse essas URLs junto com sua busca no Google para identificar a pessoa com máxima precisão.`;
+    }
 
-Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
+    const prompt = `Você é um sistema avançado de análise de identidade visual e inteligência de fontes abertas (OSINT).
+
+USE A BUSCA DO GOOGLE para pesquisar informações sobre a pessoa na imagem. Procure pelo nome, perfis em redes sociais, notícias, Wikipedia, LinkedIn e qualquer dado público disponível na internet.
+
+Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
 {
   "web_info": {
@@ -195,78 +263,186 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
     "confidence": "Alta",
     "confidence_pct": 85,
     "name": "Nome completo ou Desconhecido",
-    "occupation": "Profissão ou traço",
-    "nationality": "Nacionalidade ou traço",
-    "born": "Data de nascimento ou estimativa ou traço",
-    "known_for": "Motivo de notoriedade ou traço",
-    "summary": "Breve biografia ou indicação de que não há dados públicos identificáveis",
+    "occupation": "Profissão",
+    "nationality": "Nacionalidade",
+    "born": "Data de nascimento ou idade estimada",
+    "known_for": "Motivo de notoriedade ou traço marcante",
+    "summary": "Biografia detalhada com base nos dados encontrados na internet via Google Search",
     "tags": ["tag1", "tag2", "tag3"]
   },
   "status": {
-    "humor": "Estado emocional aparente ex Calmo Cansado Animado Neutro Estressado",
+    "humor": "Estado emocional aparente",
     "expressao": "Descrição da expressão facial",
-    "caracteristicas": "Traços físicos visíveis cabelo olhos pele idade estimada",
-    "ambiente": "Ambiente ao fundo ex Quarto Escritório Área externa Fundo neutro",
-    "iluminacao": "Tipo de iluminação ex Natural Artificial Baixa Boa iluminação",
-    "postura": "Postura e enquadramento ex Centralizado De lado Inclinado",
+    "caracteristicas": "Traços físicos visíveis",
+    "ambiente": "Ambiente ao fundo",
+    "iluminacao": "Tipo de iluminação",
+    "postura": "Postura e enquadramento",
     "tags": ["tag1", "tag2", "tag3"]
   }
-}`;
+}${webContext}`;
 
-    setLoadingStep(3);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${state.apiKey}`,
-        "HTTP-Referer": window.location.href,
-        "X-Title": "FaceScan",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: state.model,
-        max_tokens: 2000,
-        temperature: 0.2,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: "image/jpeg", data: base64 } },
           ],
         }],
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
       }),
     });
 
-    setLoadingStep(4);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error?.message || "Gemini HTTP " + res.status);
+    }
 
+    const data = await res.json();
+    const candidate = data.candidates?.[0];
+    const rawText = (candidate?.content?.parts || []).map(p => p.text || "").join("");
+
+    if (!rawText) throw new Error("Resposta vazia do Gemini");
+
+    // Extrai fontes do Google Search grounding
+    const groundingSources = (candidate?.groundingMetadata?.groundingChunks || [])
+      .map(chunk => ({ url: chunk.web?.uri || "", title: chunk.web?.title || "" }))
+      .filter(s => s.url);
+
+    if (groundingSources.length > 0)
+      log("Google Search: " + groundingSources.length + " fonte(s) encontrada(s)", "ok");
+
+    // Remove marcadores de citação como [1], [2] que o Gemini insere
+    const cleanText = rawText.replace(/\[\d+\]/g, "");
+    const match = cleanText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Formato de resposta inválido");
+
+    const parsed = JSON.parse(match[0]);
+    parsed._geminiSources = groundingSources;
+    return parsed;
+  }
+
+  /* ── FaceCheck.ID ─────────────────────────────────────────── */
+  async function searchWithFaceCheck(base64) {
+    if (!state.faceCheckKey || state.faceCheckKey === "SUA_CHAVE_FACECHECK_AQUI") return null;
+
+    const byteStr = atob(base64);
+    const bytes   = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "image/jpeg" });
+
+    const formData = new FormData();
+    formData.append("images", blob, "face.jpg");
+    formData.append("id_search", "");
+
+    const uploadRes = await fetch("https://facecheck.id/api/upload_pic", {
+      method: "POST",
+      headers: { "x-facecheck-api-key": state.faceCheckKey },
+      body: formData,
+    });
+    const uploadData = await uploadRes.json();
+    if (uploadData.error) throw new Error(uploadData.error);
+
+    const idSearch = uploadData.id_search;
+    if (!idSearch) throw new Error("id_search não retornado");
+
+    for (let i = 0; i < 30; i++) {
+      await delay(3000);
+      const searchRes = await fetch("https://facecheck.id/api/search", {
+        method: "POST",
+        headers: { "x-facecheck-api-key": state.faceCheckKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ id_search: idSearch, with_progress: true }),
+      });
+      const searchData = await searchRes.json();
+      if (searchData.error) throw new Error(searchData.error);
+      if (searchData.output) return searchData.output.items || [];
+      if (searchData.progress !== undefined)
+        log("FaceCheck: buscando... " + searchData.progress + "%", "ok");
+    }
+    throw new Error("timeout");
+  }
+
+  /* ── Azure Face API ───────────────────────────────────────── */
+  async function testAzureKey() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 10; canvas.height = 10;
+    canvas.getContext("2d").fillRect(0, 0, 10, 10);
+    const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.5));
+    const res = await fetch(
+      state.azureFaceEndpoint.replace(/\/$/, "") + "/face/v1.0/detect?returnFaceAttributes=age&detectionModel=detection_01",
+      { method: "POST", headers: { "Content-Type": "application/octet-stream", "Ocp-Apim-Subscription-Key": state.azureFaceKey }, body: blob }
+    );
+    if (res.status === 401 || res.status === 403) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error?.message || "HTTP " + res.status);
+    }
+  }
+
+  async function analyzeWithAzure(base64) {
+    if (!state.azureFaceKey || !state.azureFaceEndpoint ||
+        state.azureFaceKey === "SUA_CHAVE_AZURE_AQUI") return null;
+
+    const byteStr = atob(base64);
+    const bytes   = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "image/jpeg" });
+
+    const url = state.azureFaceEndpoint.replace(/\/$/, "") +
+      "/face/v1.0/detect?returnFaceAttributes=emotion,age,gender,glasses,headPose,smile,facialHair,hair&detectionModel=detection_01";
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream", "Ocp-Apim-Subscription-Key": state.azureFaceKey },
+      body: blob,
+    });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e?.error?.message || "HTTP " + res.status);
     }
+    const faces = await res.json();
+    return faces.length > 0 ? (faces[0].faceAttributes || null) : null;
+  }
 
-    const data = await res.json();
-    setLoadingStep(5);
+  function getTopEmotion(emotions) {
+    if (!emotions) return "—";
+    const map = { anger:"Raiva", contempt:"Desprezo", disgust:"Nojo", fear:"Medo",
+                  happiness:"Felicidade", neutral:"Neutro", sadness:"Tristeza", surprise:"Surpresa" };
+    const [key, val] = Object.entries(emotions).sort((a,b) => b[1]-a[1])[0];
+    return (map[key] || key) + " (" + Math.round(val * 100) + "%)";
+  }
 
-    const text = data.choices?.[0]?.message?.content || "";
-    if (!text) throw new Error("Resposta vazia do modelo");
+  function getHairDescription(hair) {
+    if (!hair) return "—";
+    if (hair.invisible) return "Não visível";
+    if (hair.bald > 0.7) return "Calvo";
+    const colorMap = { black:"Preto", blond:"Loiro", brown:"Castanho", gray:"Grisalho", red:"Ruivo", white:"Branco", other:"Outro" };
+    const topColor = (hair.hairColor || []).sort((a,b) => b.confidence-a.confidence)[0];
+    return topColor ? (colorMap[topColor.color] || topColor.color) : "—";
+  }
 
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Formato de resposta inválido");
-    const parsed = JSON.parse(match[0]);
-
-    await delay(200);
-    return parsed;
+  function getFacialHairDesc(fh) {
+    if (!fh) return "—";
+    const parts = [];
+    if (fh.beard     > 0.3) parts.push("Barba");
+    if (fh.moustache > 0.3) parts.push("Bigode");
+    if (fh.sideburns > 0.3) parts.push("Suíças");
+    return parts.length > 0 ? parts.join(", ") : "Não detectado";
   }
 
   /* ── Popup ────────────────────────────────────────────────── */
-  function renderPopup(data, imageData) {
+  function renderPopup(data, azure, faceItems, imageData) {
     hideLoading();
     const wi = data.web_info || {};
     const st = data.status   || {};
+    const geminiSources = data._geminiSources || [];
 
     $("popup-photo").src = imageData;
 
-    // Confiança
     const pct = wi.confidence_pct || (wi.confidence === "Alta" ? 88 : wi.confidence === "Média" ? 60 : 35);
     $("conf-val").textContent = pct + "%";
     setTimeout(() => ($("conf-fill").style.width = pct + "%"), 100);
@@ -274,7 +450,6 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
     $("popup-meta").innerHTML =
       escHtml(wi.occupation||"—") + "<br>" + escHtml(wi.nationality||"—") + "<br>" + escHtml(wi.born||"—");
 
-    // ── BLOCO WEB INFO ──
     $("popup-name").textContent    = wi.name    || "Desconhecido";
     $("popup-summary").textContent = wi.summary || "—";
 
@@ -282,6 +457,8 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
     wiTags.innerHTML = "";
     const tags1 = [...(wi.tags || [])];
     if (wi.confidence) tags1.unshift(wi.confidence + " CONF.");
+    if (geminiSources.length > 0) tags1.push("GOOGLE SEARCH");
+    if (faceItems && faceItems.length > 0) tags1.push("WEB MATCH");
     tags1.slice(0,6).forEach((t, i) => {
       const cls = i===0 ? (wi.confidence==="Alta"?"green":wi.confidence==="Baixa"?"red":"yellow") : "";
       wiTags.innerHTML += `<span class="tag ${cls}">${escHtml(t)}</span>`;
@@ -299,16 +476,47 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
       wiGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
     });
 
-    // ── BLOCO STATUS ──
+    // ── FONTES (Gemini Search + FaceCheck) ──
+    const allSources = [
+      ...geminiSources.map(s => ({ url: s.url, title: s.title, score: null, type: "google" })),
+      ...(faceItems || []).slice(0, 4).map(s => ({ url: s.url, title: "", score: s.score, type: "facecheck" })),
+    ];
+
+    const sourcesSection = $("sources-section");
+    const sourcesList    = $("popup-sources");
+    if (allSources.length > 0) {
+      sourcesSection.style.display = "block";
+      sourcesList.innerHTML = "";
+      allSources.slice(0, 8).forEach(item => {
+        let domain = "";
+        try { domain = new URL(item.url).hostname.replace("www.", ""); } catch(_) { domain = item.url; }
+        const badge = item.type === "google"
+          ? `<div class="source-score" style="color:var(--cyan)">🔍</div>`
+          : `<div class="source-score">${item.score}%</div>`;
+        const label = item.title || domain;
+        sourcesList.innerHTML += `
+          <div class="source-item">
+            ${badge}
+            <div class="source-info">
+              <div class="source-domain">${escHtml(label)}</div>
+              <a class="source-url" href="${escHtml(item.url)}" target="_blank" rel="noopener">${escHtml(item.url)}</a>
+            </div>
+          </div>`;
+      });
+    } else {
+      sourcesSection.style.display = "none";
+    }
+
+    // ── STATUS ──
     const stGrid = $("popup-status-grid");
     stGrid.innerHTML = "";
     [
-      { label:"😄 HUMOR",       value: st.humor          || "—" },
-      { label:"😐 EXPRESSÃO",   value: st.expressao      || "—" },
+      { label:"😄 HUMOR",           value: st.humor           || "—" },
+      { label:"😐 EXPRESSÃO",       value: st.expressao       || "—" },
       { label:"👤 CARACTERÍSTICAS", value: st.caracteristicas || "—" },
-      { label:"🏠 AMBIENTE",    value: st.ambiente       || "—" },
-      { label:"💡 ILUMINAÇÃO",  value: st.iluminacao     || "—" },
-      { label:"🧍 POSTURA",     value: st.postura        || "—" },
+      { label:"🏠 AMBIENTE",        value: st.ambiente        || "—" },
+      { label:"💡 ILUMINAÇÃO",      value: st.iluminacao      || "—" },
+      { label:"🧍 POSTURA",         value: st.postura         || "—" },
     ].forEach(dp => {
       stGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
     });
@@ -319,7 +527,37 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
       stTags.innerHTML += `<span class="tag yellow">${escHtml(t)}</span>`;
     });
 
-    $("sources-section").style.display = "none";
+    // ── AZURE BIOMETRIA ──
+    const nichoAzure = $("nicho-azure");
+    if (azure) {
+      nichoAzure.style.display = "block";
+      const glassesMap = { NoGlasses:"Sem óculos", ReadingGlasses:"Óculos de leitura", Sunglasses:"Óculos de sol", SwimmingGoggles:"Óculos de natação" };
+      const genderMap  = { male:"Masculino", female:"Feminino" };
+      const poseDesc   = azure.headPose
+        ? `Yaw ${azure.headPose.yaw.toFixed(0)}° / Pitch ${azure.headPose.pitch.toFixed(0)}° / Roll ${azure.headPose.roll.toFixed(0)}°`
+        : "—";
+      const azGrid = $("popup-azure-grid");
+      azGrid.innerHTML = "";
+      [
+        { label:"🎭 EMOÇÃO DOMINANTE", value: getTopEmotion(azure.emotion) },
+        { label:"🎂 IDADE ESTIMADA",   value: azure.age !== undefined ? Math.round(azure.age) + " anos" : "—" },
+        { label:"⚧ GÊNERO",           value: genderMap[azure.gender] || azure.gender || "—" },
+        { label:"😁 SORRISO",          value: azure.smile !== undefined ? Math.round(azure.smile * 100) + "%" : "—" },
+        { label:"👓 ÓCULOS",           value: glassesMap[azure.glasses] || azure.glasses || "—" },
+        { label:"💇 CABELO",           value: getHairDescription(azure.hair) },
+        { label:"🧔 PELOS FACIAIS",    value: getFacialHairDesc(azure.facialHair) },
+        { label:"📐 POSE DA CABEÇA",   value: poseDesc },
+      ].forEach(dp => {
+        azGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
+      });
+      const azTags = $("popup-azure-tags");
+      azTags.innerHTML = "";
+      ["AZURE REAL", genderMap[azure.gender] || azure.gender]
+        .filter(Boolean).forEach(t => { azTags.innerHTML += `<span class="tag yellow">${escHtml(t)}</span>`; });
+    } else {
+      nichoAzure.style.display = "none";
+    }
+
     $("popup-timestamp").textContent = "ANÁLISE: " + new Date().toLocaleString("pt-BR");
     $("result-popup").classList.add("active");
   }
@@ -328,15 +566,14 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
     hideLoading();
     $("popup-photo").src           = state.lastCapture || "";
     $("popup-name").textContent    = "ERRO NA ANÁLISE";
-    $("popup-desc").textContent    = msg;
-    $("popup-summary").textContent = "Verifique sua conexão e a chave API, depois tente novamente.";
+    $("popup-summary").textContent = "Verifique sua conexão e as chaves API, depois tente novamente.";
     $("popup-tags").innerHTML      = '<span class="tag red">FALHA</span>';
     $("popup-info-grid").innerHTML = "";
-    $("popup-sources").innerHTML   = "";
+    $("nicho-azure").style.display = "none";
+    $("sources-section").style.display = "none";
     $("conf-val").textContent = "0%"; $("conf-fill").style.width = "0%";
     $("popup-meta").textContent = "—";
     $("popup-timestamp").textContent = new Date().toLocaleString("pt-BR");
-    $("sources-section").style.display = "none";
     $("result-popup").classList.add("active");
   }
 
@@ -344,8 +581,11 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
 
   /* ── Loading ──────────────────────────────────────────────── */
   const STEPS = [
-    "◦ Capturando frame...", "◦ Enviando para Gemini Vision...",
-    "◦ Ativando Google Search...", "◦ Compilando dados...", "◦ Gerando perfil...",
+    "◦ Capturando frame...",
+    "◦ Buscando rosto na internet (FaceCheck)...",
+    "◦ Gemini pesquisando no Google...",
+    "◦ Compilando dados...",
+    "◦ Gerando perfil...",
   ];
 
   function showLoading() { resetLoadingSteps(); $("loading-overlay").classList.add("active"); $("cam-wrapper").classList.add("scanning"); }
@@ -383,25 +623,9 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
   }
 
   /* ── Utils ────────────────────────────────────────────────── */
-  function testApiKey() {
-    return fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${state.apiKey}`,
-        "HTTP-Referer": window.location.href,
-        "X-Title": "FaceScan",
-      },
-      body: JSON.stringify({
-        model: state.model,
-        max_tokens: 5,
-        messages: [{ role: "user", content: "OK" }],
-      }),
-    }).then(async r => { if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error?.message||"HTTP "+r.status); } });
-  }
-
   function setDot(id, online) {
     const el = $(id);
+    if (!el) return;
     el.style.background = online ? "var(--green)" : "var(--red)";
     el.style.boxShadow  = online ? "var(--glow-green)" : "0 0 8px var(--red)";
     el.classList.toggle("red", !online);
@@ -412,7 +636,6 @@ Analise a imagem e retorne SOMENTE JSON válido, sem markdown, com exatamente es
   function escHtml(s)      { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  /* ── Eventos globais ──────────────────────────────────────── */
   document.getElementById("result-popup").addEventListener("click", e => { if (e.target===e.currentTarget) closePopup(); });
   document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&$("setup-screen").style.display!=="none") init(); });
 
@@ -425,16 +648,38 @@ document.addEventListener("DOMContentLoaded", () => {
   const box = document.getElementById("key-status-display");
   const btn = document.getElementById("start-btn");
 
-  if (typeof ENV === "undefined" || !ENV.OPENROUTER_API_KEY) {
+  if (typeof ENV === "undefined" || !ENV.GEMINI_API_KEY) {
     box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
     box.style.color = "var(--red)"; btn.disabled = true; return;
   }
-  if (ENV.OPENROUTER_API_KEY === "SUA_CHAVE_AQUI" || ENV.OPENROUTER_API_KEY.length < 20) {
-    box.textContent = "⚠ Chave não configurada — edite config/config.js";
+  if (ENV.GEMINI_API_KEY === "SUA_CHAVE_GEMINI_AQUI" || ENV.GEMINI_API_KEY.length < 20) {
+    box.textContent = "⚠ Chave Gemini não configurada — edite config/config.js";
     box.style.color = "var(--yellow)"; btn.disabled = true; return;
   }
 
-  const masked = ENV.OPENROUTER_API_KEY.slice(0,6) + "••••••••" + ENV.OPENROUTER_API_KEY.slice(-4);
-  box.textContent = "✓ Chave OpenRouter detectada (" + masked + ")";
+  const masked = ENV.GEMINI_API_KEY.slice(0,6) + "••••••••" + ENV.GEMINI_API_KEY.slice(-4);
+  box.textContent = "✓ Gemini API detectada (" + masked + ")";
   box.style.color = "var(--green)";
+
+  const azBox = document.getElementById("azure-status-display");
+  if (azBox) {
+    if (ENV.AZURE_FACE_KEY && ENV.AZURE_FACE_KEY !== "SUA_CHAVE_AZURE_AQUI") {
+      azBox.textContent = "✓ Azure Face configurado";
+      azBox.style.color = "var(--green)";
+    } else {
+      azBox.textContent = "⚠ Azure Face não configurado";
+      azBox.style.color = "var(--yellow)";
+    }
+  }
+
+  const fcBox = document.getElementById("facecheck-status-display");
+  if (fcBox) {
+    if (ENV.FACECHECK_API_KEY && ENV.FACECHECK_API_KEY !== "SUA_CHAVE_FACECHECK_AQUI") {
+      fcBox.textContent = "✓ FaceCheck.ID configurado";
+      fcBox.style.color = "var(--green)";
+    } else {
+      fcBox.textContent = "⚠ FaceCheck.ID não configurado";
+      fcBox.style.color = "var(--yellow)";
+    }
+  }
 });
