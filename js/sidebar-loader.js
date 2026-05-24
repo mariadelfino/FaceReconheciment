@@ -14,17 +14,17 @@
       <span>Visor principal</span>
     </button>
 
-    <button class="sidebar-item" type="button" data-sidebar-item="history">
+    <button class="sidebar-item" type="button" data-sidebar-item="history" onclick="if (typeof HistoricoPage !== 'undefined' && typeof HistoricoPage.open === 'function') HistoricoPage.open(); else if (typeof App !== 'undefined' && typeof App.openHistoryPage === 'function') App.openHistoryPage();">
       <span class="sidebar-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
       <span>Histórico</span>
     </button>
 
-    <button class="sidebar-item" type="button" data-sidebar-item="log">
+    <button class="sidebar-item" type="button" data-sidebar-item="log" onclick="if (typeof LogDoSistemaPage !== 'undefined' && typeof LogDoSistemaPage.open === 'function') LogDoSistemaPage.open(); else if (typeof App !== 'undefined' && typeof App.openLogPage === 'function') App.openLogPage();">
       <span class="sidebar-icon"><i class="bi bi-journal-text" aria-hidden="true"></i></span>
       <span>Log do Sistema</span>
     </button>
 
-    <button class="sidebar-item" type="button" data-sidebar-item="settings" onclick="if (typeof App !== 'undefined' && typeof App.openSettingsPage === 'function') App.openSettingsPage();">
+    <button class="sidebar-item" type="button" data-sidebar-item="settings" onclick="if (typeof ConfiguracoesPage !== 'undefined' && typeof ConfiguracoesPage.open === 'function') ConfiguracoesPage.open(); else if (typeof App !== 'undefined' && typeof App.openSettingsPage === 'function') App.openSettingsPage();">
       <span class="sidebar-icon"><i class="bi bi-gear" aria-hidden="true"></i></span>
       <span>Configurações</span>
     </button>

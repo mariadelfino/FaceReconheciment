@@ -108,15 +108,83 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="info-card flex-grow">
-              <div class="card-title"><i class="bi bi-journal-text" aria-hidden="true"></i> LOG DO SISTEMA</div>
-              <div class="log-area" id="log-area">
-                <div class="log-line">
-                  <span class="log-time">[INIT]</span>
-                  <span class="log-text ok">Sistema carregado</span>
-                </div>
+        <div id="result-popup">
+          <div class="popup-card">
+            <div class="popup-header">
+              <div class="popup-title">
+                PERFIL IDENTIFICADO
+                <span class="popup-title-tag">RESULTADO</span>
               </div>
+              <button class="close-btn" onclick="App.closePopup()"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </div>
+
+            <div class="popup-body">
+              <div class="popup-photo-col">
+                <div class="photo-frame">
+                  <img id="popup-photo" class="popup-photo" alt="Rosto capturado" />
+                </div>
+                <div class="confidence-bar">
+                  <div class="conf-label">
+                    <span>CONFIANÇA</span>
+                    <span id="conf-val">—</span>
+                  </div>
+                  <div class="conf-track">
+                    <div class="conf-fill" id="conf-fill"></div>
+                  </div>
+                </div>
+                <div class="popup-meta" id="popup-meta">—</div>
+              </div>
+
+              <div class="popup-data-col">
+
+                <!-- NICHO 1: DADOS NA WEB -->
+                <div class="nicho-block nicho-web">
+                  <div class="nicho-header">
+                    <span class="nicho-icon"><i class="bi bi-globe2" aria-hidden="true"></i></span>
+                    <span class="nicho-title">DADOS NA WEB</span>
+                  </div>
+                  <div class="person-name" id="popup-name">DESCONHECIDO</div>
+                  <div class="tags-row" id="popup-tags"></div>
+                  <div class="info-grid" id="popup-info-grid"></div>
+                  <div class="summary-text" id="popup-summary">—</div>
+                  <div id="sources-section" style="display:none">
+                    <div class="nicho-header" style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,245,255,0.15)">
+                      <span class="nicho-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
+                      <span class="nicho-title">ENCONTRADO NA INTERNET</span>
+                    </div>
+                    <div class="sources-list" id="popup-sources"></div>
+                  </div>
+                </div>
+
+                <!-- NICHO 2: STATUS -->
+                <div class="nicho-block nicho-status">
+                  <div class="nicho-header">
+                    <span class="nicho-icon"><i class="bi bi-broadcast" aria-hidden="true"></i></span>
+                    <span class="nicho-title">STATUS ATUAL</span>
+                  </div>
+                  <div class="info-grid" id="popup-status-grid"></div>
+                  <div class="tags-row" id="popup-status-tags"></div>
+                </div>
+
+                <!-- NICHO 3: AZURE BIOMETRIA -->
+                <div class="nicho-block nicho-azure" id="nicho-azure" style="display:none">
+                  <div class="nicho-header">
+                    <span class="nicho-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
+                    <span class="nicho-title">BIOMETRIA — AZURE FACE</span>
+                  </div>
+                  <div class="info-grid" id="popup-azure-grid"></div>
+                  <div class="tags-row" id="popup-azure-tags"></div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="popup-footer">
+              <span id="popup-timestamp">—</span>
+              <span>POWERED BY GEMINI + GOOGLE SEARCH + AZURE FACE + FACECHECK.ID</span>
             </div>
           </div>
         </div>
@@ -125,6 +193,8 @@
   </div>
 
   <div id="settings-screen" style="display:none"></div>
+  <div id="history-screen" style="display:none"></div>
+  <div id="log-screen" style="display:none"></div>
 
   <!-- LOADING -->
   <div id="loading-overlay">
@@ -139,89 +209,13 @@
     </div>
   </div>
 
-  <!-- POPUP DE RESULTADO -->
-  <div id="result-popup">
-    <div class="popup-card">
-      <div class="popup-header">
-        <div class="popup-title">
-          PERFIL IDENTIFICADO
-          <span class="popup-title-tag">RESULTADO</span>
-        </div>
-        <button class="close-btn" onclick="App.closePopup()"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-      </div>
-
-      <div class="popup-body">
-        <div class="popup-photo-col">
-          <div class="photo-frame">
-            <img id="popup-photo" class="popup-photo" alt="Rosto capturado" />
-          </div>
-          <div class="confidence-bar">
-            <div class="conf-label">
-              <span>CONFIANÇA</span>
-              <span id="conf-val">—</span>
-            </div>
-            <div class="conf-track">
-              <div class="conf-fill" id="conf-fill"></div>
-            </div>
-          </div>
-          <div class="popup-meta" id="popup-meta">—</div>
-        </div>
-
-        <div class="popup-data-col">
-
-          <!-- NICHO 1: DADOS NA WEB -->
-          <div class="nicho-block nicho-web">
-            <div class="nicho-header">
-              <span class="nicho-icon"><i class="bi bi-globe2" aria-hidden="true"></i></span>
-              <span class="nicho-title">DADOS NA WEB</span>
-            </div>
-            <div class="person-name" id="popup-name">DESCONHECIDO</div>
-            <div class="tags-row" id="popup-tags"></div>
-            <div class="info-grid" id="popup-info-grid"></div>
-            <div class="summary-text" id="popup-summary">—</div>
-            <div id="sources-section" style="display:none">
-              <div class="nicho-header" style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,245,255,0.15)">
-                <span class="nicho-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
-                <span class="nicho-title">ENCONTRADO NA INTERNET</span>
-              </div>
-              <div class="sources-list" id="popup-sources"></div>
-            </div>
-          </div>
-
-          <!-- NICHO 2: STATUS -->
-          <div class="nicho-block nicho-status">
-            <div class="nicho-header">
-              <span class="nicho-icon"><i class="bi bi-broadcast" aria-hidden="true"></i></span>
-              <span class="nicho-title">STATUS ATUAL</span>
-            </div>
-            <div class="info-grid" id="popup-status-grid"></div>
-            <div class="tags-row" id="popup-status-tags"></div>
-          </div>
-
-          <!-- NICHO 3: AZURE BIOMETRIA -->
-          <div class="nicho-block nicho-azure" id="nicho-azure" style="display:none">
-            <div class="nicho-header">
-              <span class="nicho-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
-              <span class="nicho-title">BIOMETRIA — AZURE FACE</span>
-            </div>
-            <div class="info-grid" id="popup-azure-grid"></div>
-            <div class="tags-row" id="popup-azure-tags"></div>
-          </div>
-
-        </div>
-      </div>
-
-      <div class="popup-footer">
-        <span id="popup-timestamp">—</span>
-        <span>POWERED BY GEMINI + GOOGLE SEARCH + AZURE FACE + FACECHECK.ID</span>
-      </div>
-    </div>
-  </div>
-
   <canvas id="capture-canvas"></canvas>
 
   <script src="config/config.js"></script>
   <script src="js/sidebar-loader.js"></script>
+  <script src="js/configuracoes.js"></script>
+  <script src="js/historico.js"></script>
+  <script src="js/logdosistema.js"></script>
   <script src="js/app.js"></script>
 
 </body>

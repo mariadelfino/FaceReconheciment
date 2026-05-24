@@ -47,6 +47,45 @@ const App = (() => {
       </div>
     </div>`;
 
+  const LOG_PAGE_HTML = `
+    <div class="log-page">
+      <header class="page-header">
+        <div class="logo">
+          <img src="img/logo.svg" alt="FaceScan" class="logo-img" />
+        </div>
+        <div class="page-header-copy">
+          <div class="page-header-title">LOG DO SISTEMA</div>
+          <div class="page-header-subtitle">Acompanhe eventos, status e execucoes em tempo real</div>
+        </div>
+        <div class="page-header-badge">FACE_SCAN</div>
+      </header>
+
+      <div class="app-shell">
+        <div data-sidebar data-sidebar-active="log"></div>
+
+        <main class="app-content log-content">
+          <div class="settings-hero">
+            <h1>Eventos do sistema</h1>
+            <p>
+              Esta pagina concentra os registros gerados durante a execucao do scanner e das integracoes.
+            </p>
+          </div>
+
+          <div class="settings-grid log-grid">
+            <div class="setup-card settings-card log-card">
+              <div class="card-title"><i class="bi bi-journal-text" aria-hidden="true"></i> LOG DO SISTEMA</div>
+              <div class="log-area log-page-area" id="log-page-area">
+                <div class="log-line">
+                  <span class="log-time">[INIT]</span>
+                  <span class="log-text ok">Sistema carregado</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>`;
+
   const state = {
     geminiKey: "",
     azureFaceKey: "", azureFaceEndpoint: "",
@@ -55,7 +94,44 @@ const App = (() => {
     detectionCount: 0, analysisCount: 0,
     lastCapture: null,
     setupMode: "startup",
+    logEntries: [],
+    analysisHistory: [],
   };
+
+  const HISTORY_STORAGE_KEY = "facescan-analysis-history";
+
+  function loadHistoryEntries() {
+    try {
+      const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveHistoryEntries(entries) {
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries.slice(0, 20)));
+    } catch (_) {}
+  }
+
+  function persistAnalysisHistory(entry) {
+    const nextEntry = {
+      id: (window.crypto && typeof window.crypto.randomUUID === "function")
+        ? window.crypto.randomUUID()
+        : String(Date.now()),
+      timestamp: new Date().toISOString(),
+      imageData: entry.imageData || "",
+      data: entry.data || null,
+      azure: entry.azure || null,
+      faceItems: entry.faceItems || [],
+    };
+
+    state.analysisHistory = [nextEntry, ...state.analysisHistory].slice(0, 20);
+    saveHistoryEntries(state.analysisHistory);
+    return nextEntry;
+  }
 
   const $ = id => document.getElementById(id);
   const setText = (id, value) => {
@@ -124,23 +200,69 @@ const App = (() => {
   }
 
   function openSettingsPage() {
+    state.setupMode = "settings";
+    if (window.ConfiguracoesPage && typeof window.ConfiguracoesPage.open === "function") {
+      window.ConfiguracoesPage.open();
+      return;
+    }
+
     const settingsScreen = $("settings-screen");
     if (!settingsScreen) return;
-    state.setupMode = "settings";
     settingsScreen.innerHTML = SETTINGS_PAGE_HTML;
     if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
       window.SidebarComponent.loadAll(settingsScreen).catch(() => {});
     }
     settingsScreen.style.display = "block";
     $("app-screen").style.display = "none";
+    const logScreen = $("log-screen");
+    if (logScreen) logScreen.style.display = "none";
     refreshConfigStatusPanel();
+  }
+
+  function openLogPage() {
+    state.setupMode = "log";
+    if (window.LogDoSistemaPage && typeof window.LogDoSistemaPage.open === "function") {
+      window.LogDoSistemaPage.open();
+      return;
+    }
+
+    const logScreen = $("log-screen");
+    if (!logScreen) return;
+    logScreen.innerHTML = LOG_PAGE_HTML;
+    if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
+      window.SidebarComponent.loadAll(logScreen).catch(() => {});
+    }
+    logScreen.style.display = "block";
+    $("app-screen").style.display = "none";
+    renderLogArea(logScreen);
   }
 
   function openMainPage() {
     const settingsScreen = $("settings-screen");
     if (settingsScreen) settingsScreen.style.display = "none";
+    const historyScreen = $("history-screen");
+    if (historyScreen) historyScreen.style.display = "none";
+    const logScreen = $("log-screen");
+    if (logScreen) logScreen.style.display = "none";
     $("app-screen").style.display = "block";
     state.setupMode = "main";
+  }
+
+  function openHistoryPage() {
+    state.setupMode = "history";
+    if (window.HistoricoPage && typeof window.HistoricoPage.open === "function") {
+      window.HistoricoPage.open();
+      return;
+    }
+
+    const historyScreen = $("history-screen");
+    if (!historyScreen) return;
+    historyScreen.style.display = "block";
+    $("app-screen").style.display = "none";
+    const settingsScreen = $("settings-screen");
+    if (settingsScreen) settingsScreen.style.display = "none";
+    const logScreen = $("log-screen");
+    if (logScreen) logScreen.style.display = "none";
   }
 
   /* ── Câmera ───────────────────────────────────────────────── */
@@ -293,11 +415,13 @@ const App = (() => {
       $("stat-analyses").textContent = state.analysisCount;
       renderPopup(geminiResult, azure, faceItems, imageData);
       log("Análise concluída com sucesso", "ok");
+        $("result-popup").scrollIntoView({ behavior: 'smooth' });
 
     } catch (err) {
       hideLoading();
       log("Erro na análise: " + err.message, "err");
       renderErrorPopup(err.message);
+        $("result-popup").scrollIntoView({ behavior: 'smooth' });
     }
 
     $("scan-btn").disabled       = false;
@@ -639,6 +763,7 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
     $("popup-timestamp").textContent = "ANÁLISE: " + new Date().toLocaleString("pt-BR");
     $("result-popup").classList.add("active");
+    persistAnalysisHistory({ data, azure, faceItems, imageData });
   }
 
   function renderErrorPopup(msg) {
@@ -683,14 +808,20 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
   /* ── Log ──────────────────────────────────────────────────── */
   function log(msg, type = "") {
-    const area = $("log-area");
     const time = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    const line = document.createElement("div");
-    line.className = "log-line";
-    line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-text ${type}">${escHtml(msg)}</span>`;
-    area.appendChild(line);
-    area.scrollTop = area.scrollHeight;
-    while (area.children.length > 50) area.removeChild(area.firstChild);
+    state.logEntries.push({ time, msg, type });
+    renderLogArea();
+  }
+
+  function renderLogArea(root = document) {
+    const areas = root.querySelectorAll(".log-area");
+    if (areas.length === 0) return;
+    areas.forEach(area => {
+      area.innerHTML = state.logEntries.length > 0
+        ? state.logEntries.map(entry => `<div class="log-line"><span class="log-time">[${entry.time}]</span><span class="log-text ${entry.type}">${escHtml(entry.msg)}</span></div>`).join("")
+        : `<div class="log-line"><span class="log-time">[INIT]</span><span class="log-text ok">Sistema carregado</span></div>`;
+      area.scrollTop = area.scrollHeight;
+    });
   }
 
   /* ── Reset ────────────────────────────────────────────────── */
@@ -717,10 +848,11 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   function escHtml(s)      { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  document.getElementById("result-popup").addEventListener("click", e => { if (e.target===e.currentTarget) closePopup(); });
   document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&state.setupMode==="startup") init(); });
 
-  return { init, scanFace, resetSession, closePopup, openSettingsPage, openMainPage };
+  state.analysisHistory = loadHistoryEntries();
+
+  return { init, scanFace, resetSession, closePopup, openSettingsPage, openLogPage, openHistoryPage, openMainPage, renderLogArea, persistAnalysisHistory };
 
 })();
 
