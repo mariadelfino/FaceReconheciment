@@ -2,6 +2,51 @@
 
 const App = (() => {
 
+  const SETTINGS_PAGE_HTML = `
+
+      <div class="app-shell">
+        <div data-sidebar data-sidebar-active="settings"></div>
+
+        <main class="app-content settings-content">
+          <div class="settings-hero">
+            <h1>Configurações</h1>
+            <p>
+              Configure os serviços e recursos necessários para o funcionamento da plataforma.
+            </p>
+          </div>
+
+              <p class="setup-subtitle">
+                Configure suas chaves no arquivo <code>config/config.js</code> antes de iniciar.<br />
+                <strong>Gemini API</strong>: obtenha gratuitamente em
+                <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>.<br />
+                <strong>Azure Face API</strong>: crie um recurso Face em
+                <a href="https://portal.azure.com" target="_blank">portal.azure.com</a>
+                (30.000 req/mes gratis).
+              </p>
+
+              <div class="field-label">STATUS GEMINI + GOOGLE SEARCH</div>
+              <div id="key-status-display" class="key-status-box">Verificando config...</div>
+
+              <div class="field-label" style="margin-top:10px">STATUS AZURE FACE API</div>
+              <div id="azure-status-display" class="key-status-box">Verificando config...</div>
+
+              <div class="field-label" style="margin-top:10px">STATUS FACECHECK.ID</div>
+              <div id="facecheck-status-display" class="key-status-box">Verificando config...</div>
+
+              <div id="key-error" class="error-msg"></div>
+
+              <p class="hint">
+                Identificacao: <strong>Gemini + Google Search</strong> — busca e monta o perfil em tempo real<br />
+                Busca reversa: <strong>FaceCheck.ID</strong> — encontra a pessoa na internet por foto<br />
+                Biometria: <strong>Azure Face API</strong> — emocao, idade, genero e mais<br />
+                <span class="hint-warn">As chaves nunca saem do seu dispositivo.</span>
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>`;
+
   const state = {
     geminiKey: "",
     azureFaceKey: "", azureFaceEndpoint: "",
@@ -9,15 +54,28 @@ const App = (() => {
     videoStream: null, faceDetector: null,
     detectionCount: 0, analysisCount: 0,
     lastCapture: null,
+    setupMode: "startup",
   };
 
   const $ = id => document.getElementById(id);
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
+  const setHtml = (id, value) => {
+    const el = $(id);
+    if (el) el.innerHTML = value;
+  };
+  const setButtonState = (id, iconClass, label) => {
+    const el = $(id);
+    if (el) el.innerHTML = `<i class="${iconClass}" aria-hidden="true"></i> ${label}`;
+  };
 
   /* ── Init ─────────────────────────────────────────────────── */
   async function init() {
     const btn = $("start-btn");
     btn.disabled = true;
-    btn.textContent = "◉ CONECTANDO...";
+    setButtonState("start-btn", "bi bi-hourglass-split", "CONECTANDO...");
     hideError();
 
     state.geminiKey         = ENV.GEMINI_API_KEY      || "";
@@ -28,40 +86,61 @@ const App = (() => {
     try { await testGeminiKey(); }
     catch (err) {
       showError("Falha na conexão com Gemini: " + err.message);
-      btn.disabled = false; btn.textContent = "◈ INICIAR SISTEMA"; return;
+      btn.disabled = false; setButtonState("start-btn", "bi bi-play-circle", "INICIAR SISTEMA"); return;
     }
     setDot("api-dot", true);
-    $("api-status-text").textContent = "GEMINI + GOOGLE SEARCH ONLINE";
+    setText("api-status-text", "GEMINI + GOOGLE SEARCH ONLINE");
 
     if (state.azureFaceKey && state.azureFaceKey !== "SUA_CHAVE_AZURE_AQUI") {
       try {
         await testAzureKey();
         setDot("azure-dot", true);
-        $("azure-status-text").textContent = "AZURE FACE ONLINE";
+        setText("azure-status-text", "AZURE FACE ONLINE");
         log("Azure Face API conectado", "ok");
       } catch (err) {
         setDot("azure-dot", false);
-        $("azure-status-text").textContent = "AZURE FACE ERRO";
+        setText("azure-status-text", "AZURE FACE ERRO");
         log("Azure: " + err.message, "warn");
       }
     }
 
     if (state.faceCheckKey && state.faceCheckKey !== "SUA_CHAVE_FACECHECK_AQUI") {
       setDot("facecheck-dot", true);
-      $("facecheck-status-text").textContent = "FACECHECK ONLINE";
+      setText("facecheck-status-text", "FACECHECK ONLINE");
       log("FaceCheck.ID configurado — busca reversa ativa", "ok");
     }
 
     try { await startCamera(); }
     catch (err) {
       showError("Erro ao acessar câmera: " + err.message);
-      btn.disabled = false; btn.textContent = "◈ INICIAR SISTEMA"; return;
+      btn.disabled = false; setButtonState("start-btn", "bi bi-play-circle", "INICIAR SISTEMA"); return;
     }
 
+    state.setupMode = "main";
     $("setup-screen").style.display = "none";
     $("app-screen").style.display   = "block";
     initFaceDetection();
     log("Sistema totalmente operacional", "ok");
+  }
+
+  function openSettingsPage() {
+    const settingsScreen = $("settings-screen");
+    if (!settingsScreen) return;
+    state.setupMode = "settings";
+    settingsScreen.innerHTML = SETTINGS_PAGE_HTML;
+    if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
+      window.SidebarComponent.loadAll(settingsScreen).catch(() => {});
+    }
+    settingsScreen.style.display = "block";
+    $("app-screen").style.display = "none";
+    refreshConfigStatusPanel();
+  }
+
+  function openMainPage() {
+    const settingsScreen = $("settings-screen");
+    if (settingsScreen) settingsScreen.style.display = "none";
+    $("app-screen").style.display = "block";
+    state.setupMode = "main";
   }
 
   /* ── Câmera ───────────────────────────────────────────────── */
@@ -74,8 +153,8 @@ const App = (() => {
     await new Promise(r => (video.onloadedmetadata = r));
 
     setDot("cam-dot", true);
-    $("cam-status-text").textContent    = "CÂMERA ONLINE";
-    $("cam-status-overlay").textContent = "◉ AO VIVO — DETECTANDO ROSTOS";
+    setText("cam-status-text", "CÂMERA ONLINE");
+    setHtml("cam-status-overlay", '<i class="bi bi-broadcast" aria-hidden="true"></i> AO VIVO — DETECTANDO ROSTOS');
 
     const canvas = $("canvas-overlay");
     canvas.width  = video.videoWidth;
@@ -109,14 +188,14 @@ const App = (() => {
           state.detectionCount++;
           $("stat-detections").textContent    = state.detectionCount;
           $("scan-btn").disabled              = false;
-          $("cam-status-overlay").textContent = "◉ " + faces.length + " ROSTO(S) DETECTADO(S)";
+          setHtml("cam-status-overlay", '<i class="bi bi-broadcast" aria-hidden="true"></i> ' + faces.length + ' ROSTO(S) DETECTADO(S)');
           faces.forEach((f, i) => {
             const b = f.boundingBox;
             drawFaceBox(ctx, b.x, b.y, b.width, b.height, "ID-" + String(i+1).padStart(3,"0"), 1.0);
           });
         } else {
           $("scan-btn").disabled              = true;
-          $("cam-status-overlay").textContent = "◉ AO VIVO — AGUARDANDO ROSTO";
+          setHtml("cam-status-overlay", '<i class="bi bi-broadcast" aria-hidden="true"></i> AO VIVO — AGUARDANDO ROSTO');
         }
       } catch(_) {}
       requestAnimationFrame(tick);
@@ -134,7 +213,7 @@ const App = (() => {
     $("face-badge").style.display  = "block";
     $("face-badge").textContent    = "? ROSTOS";
     $("scan-btn").disabled         = false;
-    $("cam-status-overlay").textContent = "◉ AO VIVO — CLIQUE EM ESCANEAR";
+    setHtml("cam-status-overlay", '<i class="bi bi-broadcast" aria-hidden="true"></i> AO VIVO — CLIQUE EM ESCANEAR');
   }
 
   function drawFaceBox(ctx, x, y, w, h, label, alpha) {
@@ -155,7 +234,7 @@ const App = (() => {
     ctx.beginPath(); ctx.moveTo(cx,cy-15); ctx.lineTo(cx,cy+15); ctx.stroke();
     ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(x, y-22, 120, 20);
     ctx.fillStyle = "rgba(0,245,255,0.9)"; ctx.font = '11px "Share Tech Mono", monospace';
-    ctx.fillText("◈ " + label, x+6, y-7);
+    ctx.fillText(label, x+6, y-7);
     ctx.restore();
   }
 
@@ -581,11 +660,11 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
   /* ── Loading ──────────────────────────────────────────────── */
   const STEPS = [
-    "◦ Capturando frame...",
-    "◦ Buscando rosto na internet (FaceCheck)...",
-    "◦ Gemini pesquisando no Google...",
-    "◦ Compilando dados...",
-    "◦ Gerando perfil...",
+    { icon: "bi-circle", doneIcon: "bi-check2", text: "Capturando frame..." },
+    { icon: "bi-search", doneIcon: "bi-check2", text: "Buscando rosto na internet (FaceCheck)..." },
+    { icon: "bi-google", doneIcon: "bi-check2", text: "Gemini pesquisando no Google..." },
+    { icon: "bi-clipboard-data", doneIcon: "bi-check2", text: "Compilando dados..." },
+    { icon: "bi-robot", doneIcon: "bi-check2", text: "Gerando perfil..." },
   ];
 
   function showLoading() { resetLoadingSteps(); $("loading-overlay").classList.add("active"); $("cam-wrapper").classList.add("scanning"); }
@@ -595,10 +674,12 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     for (let i = 1; i <= 5; i++) {
       const el = $("step" + i);
       el.className   = i < n ? "loading-step done" : i === n ? "loading-step active" : "loading-step";
-      el.textContent = i < n ? STEPS[i-1].replace("◦","✓") : STEPS[i-1];
+      const step = STEPS[i - 1];
+      const iconClass = i < n ? step.doneIcon : step.icon;
+      el.innerHTML = `<i class="bi ${iconClass}" aria-hidden="true"></i> ${step.text}`;
     }
   }
-  function resetLoadingSteps() { for (let i=1;i<=5;i++) { $("step"+i).className="loading-step"; $("step"+i).textContent=STEPS[i-1]; } }
+  function resetLoadingSteps() { for (let i=1;i<=5;i++) { $("step"+i).className="loading-step"; $("step"+i).innerHTML=`<i class="bi ${STEPS[i-1].icon}" aria-hidden="true"></i> ${STEPS[i-1].text}`; } }
 
   /* ── Log ──────────────────────────────────────────────────── */
   function log(msg, type = "") {
@@ -637,29 +718,32 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   document.getElementById("result-popup").addEventListener("click", e => { if (e.target===e.currentTarget) closePopup(); });
-  document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&$("setup-screen").style.display!=="none") init(); });
+  document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&state.setupMode==="startup") init(); });
 
-  return { init, scanFace, resetSession, closePopup };
+  return { init, scanFace, resetSession, closePopup, openSettingsPage, openMainPage };
 
 })();
 
-/* Verifica config ao carregar */
-document.addEventListener("DOMContentLoaded", () => {
+function refreshConfigStatusPanel() {
   const box = document.getElementById("key-status-display");
   const btn = document.getElementById("start-btn");
 
   if (typeof ENV === "undefined" || !ENV.GEMINI_API_KEY) {
-    box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
-    box.style.color = "var(--red)"; btn.disabled = true; return;
+    if (box) box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
+    if (box) box.style.color = "var(--red)";
+    if (btn) btn.disabled = true;
+    return;
   }
   if (ENV.GEMINI_API_KEY === "SUA_CHAVE_GEMINI_AQUI" || ENV.GEMINI_API_KEY.length < 20) {
-    box.textContent = "⚠ Chave Gemini não configurada — edite config/config.js";
-    box.style.color = "var(--yellow)"; btn.disabled = true; return;
+    if (box) box.textContent = "⚠ Chave Gemini não configurada — edite config/config.js";
+    if (box) box.style.color = "var(--yellow)";
+    if (btn) btn.disabled = true;
+    return;
   }
 
   const masked = ENV.GEMINI_API_KEY.slice(0,6) + "••••••••" + ENV.GEMINI_API_KEY.slice(-4);
-  box.textContent = "✓ Gemini API detectada (" + masked + ")";
-  box.style.color = "var(--green)";
+  if (box) box.textContent = "✓ Gemini API detectada (" + masked + ")";
+  if (box) box.style.color = "var(--green)";
 
   const azBox = document.getElementById("azure-status-display");
   if (azBox) {
@@ -682,4 +766,9 @@ document.addEventListener("DOMContentLoaded", () => {
       fcBox.style.color = "var(--yellow)";
     }
   }
+}
+
+/* Verifica config ao carregar */
+document.addEventListener("DOMContentLoaded", () => {
+  refreshConfigStatusPanel();
 });
