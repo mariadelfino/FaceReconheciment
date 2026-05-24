@@ -808,22 +808,51 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
   /* ── Log ──────────────────────────────────────────────────── */
   function log(msg, type = "") {
-    const time = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    const time = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+    
+    // Salva no histórico para a página dedicada de logs
     state.logEntries.push({ time, msg, type });
-    renderLogArea();
+
+    // Limita o histórico na memória a 50 itens
+    if (state.logEntries.length > 50) {
+      state.logEntries.shift();
+    }
+
+    // Atualiza as caixas de log ativas na tela anexando a nova linha (como era no original)
+    const areas = document.querySelectorAll(".log-area");
+    areas.forEach(area => {
+      const line = document.createElement("div");
+      line.className = "log-line";
+      line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-text ${type}">${escHtml(msg)}</span>`;
+      area.appendChild(line);
+      area.scrollTop = area.scrollHeight;
+
+      // Mantém apenas os últimos 50 elementos visíveis no DOM
+      while (area.children.length > 50) {
+        area.removeChild(area.firstChild);
+      }
+    });
   }
 
   function renderLogArea(root = document) {
     const areas = root.querySelectorAll(".log-area");
     if (areas.length === 0) return;
+
     areas.forEach(area => {
-      area.innerHTML = state.logEntries.length > 0
-        ? state.logEntries.map(entry => `<div class="log-line"><span class="log-time">[${entry.time}]</span><span class="log-text ${entry.type}">${escHtml(entry.msg)}</span></div>`).join("")
-        : `<div class="log-line"><span class="log-time">[INIT]</span><span class="log-text ok">Sistema carregado</span></div>`;
+      // Garante que a mensagem [INIT] original permaneça fixa ao carregar/recarregar a tela
+      let html = `<div class="log-line"><span class="log-time">[INIT]</span><span class="log-text ok">Sistema carregado</span></div>`;
+
+      // Adiciona o histórico salvo abaixo do [INIT]
+      if (state.logEntries.length > 0) {
+        html += state.logEntries.map(entry => 
+          `<div class="log-line"><span class="log-time">[${entry.time}]</span><span class="log-text ${entry.type}">${escHtml(entry.msg)}</span></div>`
+        ).join("");
+      }
+
+      area.innerHTML = html;
       area.scrollTop = area.scrollHeight;
     });
   }
-
   /* ── Reset ────────────────────────────────────────────────── */
   function resetSession() {
     $("target-preview").style.display = "none";

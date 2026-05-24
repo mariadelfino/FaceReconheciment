@@ -46,8 +46,8 @@ window.LogDoSistemaPage = (() => {
     const settingsScreen = document.getElementById("settings-screen");
     if (settingsScreen) settingsScreen.style.display = "none";
 
-    if (window.App && typeof window.App.renderLogArea === "function") {
-      window.App.renderLogArea(logScreen);
+    if (typeof App !== "undefined" && typeof App.renderLogArea === "function") {
+      App.renderLogArea(logScreen);
     }
   }
 
