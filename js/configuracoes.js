@@ -33,11 +33,11 @@ window.ConfiguracoesPage = (() => {
 
         <div id="key-error" class="error-msg"></div>
 
-        <p class="hint">
+        <p class="hinte">
           Identificação: <strong>Gemini + Google Search</strong> — busca e monta o perfil em tempo real<br />
           Busca reversa: <strong>FaceCheck.ID</strong> — encontra a pessoa na internet por foto<br />
           Biometria: <strong>Azure Face API</strong> — emoção, idade, genero e mais<br />
-          <span class="hint-warn">As chaves nunca saem do seu dispositivo.</span>
+          <span class="hinte-warn">As chaves nunca saem do seu dispositivo.</span>
         </p>
       </main>
     </div>`;

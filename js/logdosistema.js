@@ -46,6 +46,15 @@ window.LogDoSistemaPage = (() => {
     const settingsScreen = document.getElementById("settings-screen");
     if (settingsScreen) settingsScreen.style.display = "none";
 
+    const historyScreen = document.getElementById("history-screen");
+    if (historyScreen) historyScreen.style.display = "none";
+
+    if (window.HistoricoPage && typeof window.HistoricoPage.closeModal === "function") {
+      window.HistoricoPage.closeModal();
+    }
+
+    document.body.classList.remove("modal-open");
+
     if (typeof App !== "undefined" && typeof App.renderLogArea === "function") {
       App.renderLogArea(logScreen);
     }

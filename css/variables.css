@@ -5,10 +5,11 @@
   --brand-green: #238652; /* main brand color */
   --brand-green-2: #2fa66e; /* lighter accent */
   --gray:        #d5d6d8; /* light gray */
-  --gray-dark:   #868686; /* darker gray */
-  --bg:          #f7f7f7; /* page background (white-ish) */
+  --gray-dark:   #5f6368; /* darker gray */
+  --bg:          #f4f5f7; /* page background (white-ish) */
   --card:        #ffffff; /* card background */
-  --text:        #1a1a1a; /* primary text (black) */
+  --text:        #161616; /* primary text (black) */
+  --bg-soft: #fafafa; /* lighter background for subtle surfaces */
 
   /* Backwards-compatible mappings for existing tokens */
   --void:        var(--bg);
@@ -27,16 +28,16 @@
   --yellow:      #ffc800;
 
   --white:       var(--card);
-  --off-white:   var(--gray);
-  --muted:       rgba(26,26,26,0.45);
+  --off-white: #f8f8f8;
+  --muted:       #8d939c;
   --ghost:       rgba(35,134,82,0.06);
 
-  --success:     var(--brand-green);
+  --success:     #41c97b;
   --warn:        #f2b705;
   --danger:      #d9534f;
 
-  --border:      rgba(26,26,26,0.06);
-  --border-soft: rgba(26,26,26,0.03);
+  --border:      #d9dde3;
+  --border-soft: #eceef1;
 
   --glow-v:      0 0 18px rgba(35,134,82,0.08);
   --glow-l:      0 0 12px rgba(35,134,82,0.06);
@@ -44,6 +45,10 @@
 
   --glass:       rgba(255,255,255,0.96);
   --glass2:      rgba(247,247,247,0.9);
+
+  --shadow-sm: 0 8px 20px rgba(0,0,0,0.05);
+  --shadow-md: 0 18px 40px rgba(0,0,0,0.08);
+  --shadow-lg: 0 30px 70px rgba(0,0,0,0.12);
 
   /* ----------------- Typography ------------------- */
   --font-display: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;

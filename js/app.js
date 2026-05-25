@@ -39,7 +39,7 @@ const App = (() => {
                 Identificacao: <strong>Gemini + Google Search</strong> — busca e monta o perfil em tempo real<br />
                 Busca reversa: <strong>FaceCheck.ID</strong> — encontra a pessoa na internet por foto<br />
                 Biometria: <strong>Azure Face API</strong> — emocao, idade, genero e mais<br />
-                <span class="hint-warn">As chaves nunca saem do seu dispositivo.</span>
+                <span class="hinte-warn">As chaves nunca saem do seu dispositivo.</span>
               </p>
             </div>
           </div>
@@ -212,7 +212,12 @@ const App = (() => {
     if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
       window.SidebarComponent.loadAll(settingsScreen).catch(() => {});
     }
-    settingsScreen.style.display = "block";
+      settingsScreen.style.display = "block";
+      const historyScreen = $("history-screen");
+      if (historyScreen) historyScreen.style.display = "none";
+      if (window.HistoricoPage && typeof window.HistoricoPage.closeModal === "function") {
+        window.HistoricoPage.closeModal();
+      }
     $("app-screen").style.display = "none";
     const logScreen = $("log-screen");
     if (logScreen) logScreen.style.display = "none";
@@ -232,7 +237,9 @@ const App = (() => {
     if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
       window.SidebarComponent.loadAll(logScreen).catch(() => {});
     }
-    logScreen.style.display = "block";
+      logScreen.style.display = "block";
+      const historyScreen = $("history-screen");
+      if (historyScreen) historyScreen.style.display = "none";
     $("app-screen").style.display = "none";
     renderLogArea(logScreen);
   }
@@ -244,6 +251,10 @@ const App = (() => {
     if (historyScreen) historyScreen.style.display = "none";
     const logScreen = $("log-screen");
     if (logScreen) logScreen.style.display = "none";
+      if (window.HistoricoPage && typeof window.HistoricoPage.closeModal === "function") {
+        window.HistoricoPage.closeModal();
+      }
+      document.body.classList.remove("modal-open");
     $("app-screen").style.display = "block";
     state.setupMode = "main";
   }
@@ -333,7 +344,7 @@ const App = (() => {
       drawFaceBox(ctx, canvas.width/2 - fw/2, canvas.height/2 - fh/2, fw, fh, "POSICIONE O ROSTO", 0.4);
     }, 100);
     $("face-badge").style.display  = "block";
-    $("face-badge").textContent    = "? ROSTOS";
+    $("face-badge").textContent    = "INSIRA O ROSTO";
     $("scan-btn").disabled         = false;
     setHtml("cam-status-overlay", '<i class="bi bi-broadcast" aria-hidden="true"></i> AO VIVO — CLIQUE EM ESCANEAR');
   }
@@ -415,13 +426,11 @@ const App = (() => {
       $("stat-analyses").textContent = state.analysisCount;
       renderPopup(geminiResult, azure, faceItems, imageData);
       log("Análise concluída com sucesso", "ok");
-        $("result-popup").scrollIntoView({ behavior: 'smooth' });
 
     } catch (err) {
       hideLoading();
       log("Erro na análise: " + err.message, "err");
       renderErrorPopup(err.message);
-        $("result-popup").scrollIntoView({ behavior: 'smooth' });
     }
 
     $("scan-btn").disabled       = false;
@@ -650,8 +659,11 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     $("conf-val").textContent = pct + "%";
     setTimeout(() => ($("conf-fill").style.width = pct + "%"), 100);
 
-    $("popup-meta").innerHTML =
-      escHtml(wi.occupation||"—") + "<br>" + escHtml(wi.nationality||"—") + "<br>" + escHtml(wi.born||"—");
+    setPopupMeta([
+      wi.occupation || "—",
+      wi.nationality || "—",
+      wi.born || "—",
+    ]);
 
     $("popup-name").textContent    = wi.name    || "Desconhecido";
     $("popup-summary").textContent = wi.summary || "—";
@@ -763,6 +775,7 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
     $("popup-timestamp").textContent = "ANÁLISE: " + new Date().toLocaleString("pt-BR");
     $("result-popup").classList.add("active");
+    document.body.classList.add("modal-open");
     persistAnalysisHistory({ data, azure, faceItems, imageData });
   }
 
@@ -776,12 +789,29 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     $("nicho-azure").style.display = "none";
     $("sources-section").style.display = "none";
     $("conf-val").textContent = "0%"; $("conf-fill").style.width = "0%";
-    $("popup-meta").textContent = "—";
+    setPopupMeta(["—"]);
     $("popup-timestamp").textContent = new Date().toLocaleString("pt-BR");
     $("result-popup").classList.add("active");
+    document.body.classList.add("modal-open");
   }
 
-  function closePopup() { $("result-popup").classList.remove("active"); }
+  function closePopup() {
+    $("result-popup").classList.remove("active");
+    document.body.classList.remove("modal-open");
+  }
+
+  function setPopupMeta(items) {
+    const meta = $("popup-meta");
+    if (!meta) return;
+
+    const lines = (items || []).filter(Boolean);
+    if (lines.length === 0) {
+      meta.innerHTML = `<div class="popup-meta-item">• —</div>`;
+      return;
+    }
+
+    meta.innerHTML = lines.map(item => `<div class="popup-meta-item">• ${escHtml(item)}</div>`).join("");
+  }
 
   /* ── Loading ──────────────────────────────────────────────── */
   const STEPS = [
@@ -878,6 +908,10 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&state.setupMode==="startup") init(); });
+  document.addEventListener("click", e => {
+    const popup = $("result-popup");
+    if (popup && e.target === popup) closePopup();
+  });
 
   state.analysisHistory = loadHistoryEntries();
 

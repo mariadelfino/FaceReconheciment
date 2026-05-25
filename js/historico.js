@@ -23,52 +23,63 @@ window.HistoricoPage = (() => {
               <div class="card-title"><i class="bi bi-collection-play" aria-hidden="true"></i> ANÁLISES SALVAS</div>
               <div id="history-list" class="history-list"></div>
             </section>
-
-            <section class="setup-card settings-card history-detail-card">
-              <div class="card-title"><i class="bi bi-info-circle" aria-hidden="true"></i> DETALHES</div>
-              <div id="history-empty" class="history-empty">
-                Selecione uma análise na lista para ver a foto, fontes e resumo.
-              </div>
-              <div id="history-detail" class="history-detail" style="display:none">
-                <div class="history-hero">
-                  <div class="history-photo-wrap">
-                    <img id="history-photo" class="history-photo" alt="Foto da análise" />
-                  </div>
-                  <div class="history-hero-meta">
-                    <div class="history-person" id="history-name">—</div>
-                    <div class="history-time" id="history-time">—</div>
-                    <div class="history-tags" id="history-tags"></div>
-                  </div>
-                </div>
-
-                <div class="history-summary" id="history-summary">—</div>
-
-                <div class="history-sections">
-                  <div class="history-block">
-                    <div class="card-title"><i class="bi bi-globe2" aria-hidden="true"></i> DADOS NA WEB</div>
-                    <div class="history-meta" id="history-web-meta"></div>
-                    <div class="info-grid" id="history-web-grid"></div>
-                  </div>
-
-                  <div class="history-block">
-                    <div class="card-title"><i class="bi bi-broadcast" aria-hidden="true"></i> STATUS ATUAL</div>
-                    <div class="info-grid" id="history-status-grid"></div>
-                  </div>
-
-                  <div class="history-block" id="history-azure-block" style="display:none">
-                    <div class="card-title"><i class="bi bi-cpu" aria-hidden="true"></i> BIOMETRIA — AZURE FACE</div>
-                    <div class="info-grid" id="history-azure-grid"></div>
-                  </div>
-
-                  <div class="history-block" id="history-sources-block" style="display:none">
-                    <div class="card-title"><i class="bi bi-search" aria-hidden="true"></i> FONTES</div>
-                    <div class="sources-list" id="history-sources"></div>
-                  </div>
-                </div>
-              </div>
-            </section>
           </div>
         </main>
+      </div>
+
+      <div id="history-modal" class="history-modal" aria-hidden="true">
+        <div class="history-modal-backdrop" data-history-close></div>
+        <section class="setup-card settings-card history-detail-card history-modal-card" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+          <div class="history-modal-header">
+            <div class="card-title" id="history-modal-title"><i class="bi bi-info-circle" aria-hidden="true"></i> DETALHES</div>
+            <button class="close-btn" type="button" data-history-close aria-label="Fechar modal">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div id="history-empty" class="history-empty">
+            Selecione uma análise na lista para ver a foto, fontes e resumo.
+          </div>
+
+          <div id="history-detail" class="history-detail" style="display:none">
+            <div class="history-hero">
+              <div class="history-photo-wrap">
+                <img id="history-photo" class="history-photo" alt="Foto da análise" />
+              </div>
+              <div class="history-hero-meta">
+                <div class="history-person" id="history-name">—</div>
+                <div class="history-time" id="history-time">—</div>
+                <div class="history-tags" id="history-tags"></div>
+              </div>
+            </div>
+
+            <div class="history-summary" id="history-summary">—</div>
+
+            <div class="history-sections">
+              <div class="history-block">
+                <div class="card-title"><i class="bi bi-globe2" aria-hidden="true"></i> DADOS NA WEB</div>
+                <div class="history-meta" id="history-web-meta"></div>
+                <div class="info-grid" id="history-web-grid"></div>
+              </div>
+
+              <div class="history-block">
+                <div class="card-title"><i class="bi bi-broadcast" aria-hidden="true"></i> STATUS ATUAL</div>
+                <div class="info-grid" id="history-status-grid"></div>
+                <div class="history-tags" id="history-status-tags"></div>
+              </div>
+
+              <div class="history-block" id="history-azure-block" style="display:none">
+                <div class="card-title"><i class="bi bi-cpu" aria-hidden="true"></i> BIOMETRIA — AZURE FACE</div>
+                <div class="info-grid" id="history-azure-grid"></div>
+              </div>
+
+              <div class="history-block" id="history-sources-block" style="display:none">
+                <div class="card-title"><i class="bi bi-search" aria-hidden="true"></i> FONTES</div>
+                <div class="sources-list" id="history-sources"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>`;
 
@@ -101,15 +112,51 @@ window.HistoricoPage = (() => {
     const logScreen = document.getElementById("log-screen");
     if (logScreen) logScreen.style.display = "none";
 
+    const body = document.body;
+    if (body) body.classList.remove("modal-open");
+
     const entries = getEntries();
     if (!selectedId || !entries.some(entry => entry.id === selectedId)) {
       selectedId = entries[0] ? entries[0].id : "";
     }
 
+    bindModalControls();
+
     renderList();
-    if (selectedId) {
-      renderDetail(selectedId);
-    }
+    closeModal();
+  }
+
+  function bindModalControls() {
+    const modal = document.getElementById("history-modal");
+    if (!modal || modal.dataset.bound === "true") return;
+
+    modal.querySelectorAll("[data-history-close]").forEach(button => {
+      button.addEventListener("click", closeModal);
+    });
+
+    modal.addEventListener("click", event => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+
+    modal.dataset.bound = "true";
+  }
+
+  function openModal() {
+    const modal = document.getElementById("history-modal");
+    if (!modal) return;
+    modal.classList.add("active");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+  }
+
+  function closeModal() {
+    const modal = document.getElementById("history-modal");
+    if (!modal) return;
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
   }
 
   function renderList() {
@@ -161,7 +208,10 @@ window.HistoricoPage = (() => {
     const entry = getEntries().find(item => item.id === entryId);
     const detail = document.getElementById("history-detail");
     const empty = document.getElementById("history-empty");
-    if (!detail || !empty || !entry) return;
+    if (!detail || !empty || !entry) {
+      closeModal();
+      return;
+    }
 
     const data = entry.data || {};
     const web = data.web_info || {};
@@ -182,11 +232,13 @@ window.HistoricoPage = (() => {
     const webMeta = document.getElementById("history-web-meta");
     const webGrid = document.getElementById("history-web-grid");
     const statusGrid = document.getElementById("history-status-grid");
+    const statusTags = document.getElementById("history-status-tags");
     const azureBlock = document.getElementById("history-azure-block");
     const azureGrid = document.getElementById("history-azure-grid");
     const sourcesBlock = document.getElementById("history-sources-block");
     const sourcesList = document.getElementById("history-sources");
 
+    openModal();
     if (photo) photo.src = entry.imageData || "";
     if (name) name.textContent = web.name || "Desconhecido";
     if (time) time.textContent = formatTimestamp(entry.timestamp);
@@ -220,6 +272,13 @@ window.HistoricoPage = (() => {
         { label: "ILUMINAÇÃO", value: st.iluminacao || "—" },
         { label: "POSTURA", value: st.postura || "—" },
       ].map(item => `<div class="info-item"><div class="info-item-label">${escapeHtml(item.label)}</div><div class="info-item-value">${escapeHtml(item.value)}</div></div>`).join("");
+    }
+
+    if (statusTags) {
+      statusTags.innerHTML = "";
+      (st.tags || []).slice(0, 8).forEach(tag => {
+        statusTags.innerHTML += `<span class="tag yellow">${escapeHtml(tag)}</span>`;
+      });
     }
 
     if (azureBlock && azureGrid) {
@@ -303,5 +362,5 @@ window.HistoricoPage = (() => {
     return parts.length > 0 ? parts.join(", ") : "Não detectado";
   }
 
-  return { open, renderList, renderDetail };
+  return { open, renderList, renderDetail, closeModal };
 })();
