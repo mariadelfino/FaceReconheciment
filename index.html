@@ -157,10 +157,16 @@
                     <span class="nicho-icon"><i class="bi bi-globe2" aria-hidden="true"></i></span>
                     <span class="nicho-title">DADOS NA WEB</span>
                   </div>
+                  <div id="popup-local-match" class="local-match-banner" style="display:none"></div>
                   <div class="person-name" id="popup-name">DESCONHECIDO</div>
                   <div class="tags-row" id="popup-tags"></div>
                   <div class="info-grid" id="popup-info-grid"></div>
                   <div class="summary-text" id="popup-summary">—</div>
+                  <div id="popup-register-section" style="display:none">
+                    <button class="register-btn" onclick="App.openRegisterModal()">
+                      <i class="bi bi-person-plus" aria-hidden="true"></i> CADASTRAR PESSOA NO BANCO DE DADOS
+                    </button>
+                  </div>
                   <div id="sources-section" style="display:none">
                     <div class="nicho-header" style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,245,255,0.15)">
                       <span class="nicho-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
@@ -203,7 +209,7 @@
     </div>
   </div>
 
-  <div id="settings-screen" style="display:none"></div>
+
   <div id="history-screen" style="display:none"></div>
   <div id="log-screen" style="display:none"></div>
 
@@ -222,9 +228,49 @@
 
   <canvas id="capture-canvas"></canvas>
 
+  <!-- MODAL CADASTRO -->
+  <div id="register-modal" class="register-modal-overlay">
+    <div class="register-modal-card">
+      <div class="register-modal-header">
+        <div class="register-modal-title">
+          <i class="bi bi-person-plus" aria-hidden="true"></i> CADASTRAR PESSOA
+        </div>
+        <button class="close-btn" onclick="App.closeRegisterModal()">
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="register-modal-body">
+        <div class="register-photo-preview">
+          <img id="register-photo" alt="Foto capturada" />
+          <div class="register-photo-label">FOTO CAPTURADA</div>
+        </div>
+        <div class="register-form">
+          <div class="form-group">
+            <label class="field-label" for="register-name">NOME COMPLETO</label>
+            <input type="text" id="register-name" class="form-input" placeholder="Ex: João Silva" maxlength="100" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="register-age">IDADE</label>
+            <input type="number" id="register-age" class="form-input" placeholder="Ex: 28" min="1" max="120" />
+          </div>
+          <div id="register-error" class="error-msg" style="margin-top:0; padding-top:10px"></div>
+          <div id="register-success" class="register-success-msg" style="display:none">
+            <i class="bi bi-check-circle" aria-hidden="true"></i> Cadastrado com sucesso!
+          </div>
+          <button class="cyber-btn" id="register-submit-btn" onclick="App.submitRegister()">
+            <i class="bi bi-person-check" aria-hidden="true"></i> CADASTRAR
+          </button>
+          <p class="hint" style="margin-top:8px; text-align:left">
+            Apenas nome e idade são salvos. Nenhum dado sensível é coletado.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="config/config.js"></script>
   <script src="js/sidebar-loader.js"></script>
-  <script src="js/configuracoes.js"></script>
+
   <script src="js/historico.js"></script>
   <script src="js/logdosistema.js"></script>
   <script src="js/app.js"></script>

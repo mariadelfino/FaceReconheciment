@@ -2,51 +2,6 @@
 
 const App = (() => {
 
-  const SETTINGS_PAGE_HTML = `
-
-      <div class="app-shell">
-        <div data-sidebar data-sidebar-active="settings"></div>
-
-        <main class="app-content settings-content">
-          <div class="settings-hero">
-            <h1>Configurações</h1>
-            <p>
-              Configure os serviços e recursos necessários para o funcionamento da plataforma.
-            </p>
-          </div>
-
-              <p class="setup-subtitle">
-                Configure suas chaves no arquivo <code>config/config.js</code> antes de iniciar.<br />
-                <strong>Gemini API</strong>: obtenha gratuitamente em
-                <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>.<br />
-                <strong>Azure Face API</strong>: crie um recurso Face em
-                <a href="https://portal.azure.com" target="_blank">portal.azure.com</a>
-                (30.000 req/mes gratis).
-              </p>
-
-              <div class="field-label">STATUS GEMINI + GOOGLE SEARCH</div>
-              <div id="key-status-display" class="key-status-box">Verificando config...</div>
-
-              <div class="field-label" style="margin-top:10px">STATUS AZURE FACE API</div>
-              <div id="azure-status-display" class="key-status-box">Verificando config...</div>
-
-              <div class="field-label" style="margin-top:10px">STATUS FACECHECK.ID</div>
-              <div id="facecheck-status-display" class="key-status-box">Verificando config...</div>
-
-              <div id="key-error" class="error-msg"></div>
-
-              <p class="hint">
-                Identificacao: <strong>Gemini + Google Search</strong> — busca e monta o perfil em tempo real<br />
-                Busca reversa: <strong>FaceCheck.ID</strong> — encontra a pessoa na internet por foto<br />
-                Biometria: <strong>Azure Face API</strong> — emocao, idade, genero e mais<br />
-                <span class="hinte-warn">As chaves nunca saem do seu dispositivo.</span>
-              </p>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>`;
-
   const LOG_PAGE_HTML = `
     <div class="log-page">
       <header class="page-header">
@@ -99,7 +54,10 @@ const App = (() => {
   };
 
   const HISTORY_STORAGE_KEY = "facescan-analysis-history";
+  const LOCAL_DB_STORAGE_KEY = "facescan-local-db";
+  const AZURE_PERSON_GROUP_ID = "facescan-localdb";
 
+  /* ── History ──────────────────────────────────────────────── */
   function loadHistoryEntries() {
     try {
       const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -133,6 +91,24 @@ const App = (() => {
     return nextEntry;
   }
 
+  /* ── Local DB ─────────────────────────────────────────────── */
+  function loadLocalDB() {
+    try {
+      const raw = localStorage.getItem(LOCAL_DB_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) { return []; }
+  }
+
+  function saveLocalDB(persons) {
+    try { localStorage.setItem(LOCAL_DB_STORAGE_KEY, JSON.stringify(persons)); } catch (_) {}
+  }
+
+  function getLocalDBPersonById(azurePersonId) {
+    return loadLocalDB().find(p => p.azurePersonId === azurePersonId) || null;
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
   const setText = (id, value) => {
     const el = $(id);
@@ -199,31 +175,6 @@ const App = (() => {
     log("Sistema totalmente operacional", "ok");
   }
 
-  function openSettingsPage() {
-    state.setupMode = "settings";
-    if (window.ConfiguracoesPage && typeof window.ConfiguracoesPage.open === "function") {
-      window.ConfiguracoesPage.open();
-      return;
-    }
-
-    const settingsScreen = $("settings-screen");
-    if (!settingsScreen) return;
-    settingsScreen.innerHTML = SETTINGS_PAGE_HTML;
-    if (window.SidebarComponent && typeof window.SidebarComponent.loadAll === "function") {
-      window.SidebarComponent.loadAll(settingsScreen).catch(() => {});
-    }
-      settingsScreen.style.display = "block";
-      const historyScreen = $("history-screen");
-      if (historyScreen) historyScreen.style.display = "none";
-      if (window.HistoricoPage && typeof window.HistoricoPage.closeModal === "function") {
-        window.HistoricoPage.closeModal();
-      }
-    $("app-screen").style.display = "none";
-    const logScreen = $("log-screen");
-    if (logScreen) logScreen.style.display = "none";
-    refreshConfigStatusPanel();
-  }
-
   function openLogPage() {
     state.setupMode = "log";
     if (window.LogDoSistemaPage && typeof window.LogDoSistemaPage.open === "function") {
@@ -245,8 +196,6 @@ const App = (() => {
   }
 
   function openMainPage() {
-    const settingsScreen = $("settings-screen");
-    if (settingsScreen) settingsScreen.style.display = "none";
     const historyScreen = $("history-screen");
     if (historyScreen) historyScreen.style.display = "none";
     const logScreen = $("log-screen");
@@ -270,8 +219,6 @@ const App = (() => {
     if (!historyScreen) return;
     historyScreen.style.display = "block";
     $("app-screen").style.display = "none";
-    const settingsScreen = $("settings-screen");
-    if (settingsScreen) settingsScreen.style.display = "none";
     const logScreen = $("log-screen");
     if (logScreen) logScreen.style.display = "none";
   }
@@ -399,7 +346,6 @@ const App = (() => {
     setLoadingStep(2);
 
     try {
-      // Etapa 1: FaceCheck + Azure em paralelo
       const [faceCheckRes, azureRes] = await Promise.allSettled([
         searchWithFaceCheck(b64),
         analyzeWithAzure(b64),
@@ -413,18 +359,26 @@ const App = (() => {
       if (azure)
         log("Azure: biometria real obtida", "ok");
 
-      // Etapa 2: Gemini com Google Search + contexto do FaceCheck
+      // Tenta identificar no banco local antes do Gemini (usa Gemini Vision para comparar rostos)
+      let localMatch = null;
+      if (loadLocalDB().length > 0) {
+        try {
+          localMatch = await identifyFromLocalDB(b64);
+          if (localMatch) log("Banco local: " + localMatch.name + " reconhecido!", "ok");
+        } catch (_) {}
+      }
+
       setLoadingStep(3);
       log("Gemini pesquisando no Google...", "ok");
 
-      const geminiResult = await analyzeWithGeminiSearch(b64, faceItems);
+      const geminiResult = await analyzeWithGeminiSearch(b64, faceItems, localMatch);
 
       setLoadingStep(4); await delay(200);
       setLoadingStep(5); await delay(200);
 
       state.analysisCount++;
       $("stat-analyses").textContent = state.analysisCount;
-      renderPopup(geminiResult, azure, faceItems, imageData);
+      renderPopup(geminiResult, azure, faceItems, imageData, localMatch);
       log("Análise concluída com sucesso", "ok");
 
     } catch (err) {
@@ -454,31 +408,67 @@ const App = (() => {
     }
   }
 
-  async function analyzeWithGeminiSearch(base64, faceItems) {
+  async function analyzeWithGeminiSearch(base64, faceItems, localMatch = null) {
     let webContext = "";
     if (faceItems && faceItems.length > 0) {
       const top = faceItems.slice(0, 5);
       webContext = `\n\nO rosto foi encontrado nas seguintes páginas da internet:\n` +
         top.map(item => `- ${item.url} (relevância: ${item.score}%)`).join("\n") +
-        `\n\nUse essas URLs junto com sua busca no Google para identificar a pessoa com máxima precisão.`;
+        `\n\nUse essas URLs junto com sua busca no Google para confirmar a identidade com máxima precisão.`;
     }
 
-    const prompt = `Você é um sistema avançado de análise de identidade visual e inteligência de fontes abertas (OSINT).
+    let localContext = "";
+    if (localMatch) {
+      localContext = `\n\nIMPORTANTE — BANCO DE DADOS LOCAL: Esta pessoa foi cadastrada localmente com o nome "${localMatch.name}" (${localMatch.age} anos). Busque especificamente por "${localMatch.name}" para confirmar e enriquecer o perfil.`;
+    }
 
-USE A BUSCA DO GOOGLE para pesquisar informações sobre a pessoa na imagem. Procure pelo nome, perfis em redes sociais, notícias, Wikipedia, LinkedIn e qualquer dado público disponível na internet.
+    const prompt = `Você é um sistema especializado em identificação de pessoas públicas e análise OSINT (Open Source Intelligence).
 
-Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
+OBJETIVO: Identificar com máxima precisão quem é a pessoa nesta imagem usando Google Search.
+
+═══ ETAPA 1 — ANÁLISE VISUAL (obrigatória antes de buscar) ═══
+Observe atentamente e anote:
+- Gênero, faixa etária estimada (±5 anos), etnia/origem aparente
+- Cabelo: cor, comprimento, textura, estilo (liso, crespo, ondulado, raspado, tingido, etc.)
+- Formato do rosto, sobrancelhas, olhos, nariz, lábios — traços marcantes
+- Tom de pele, marcas visíveis, tatuagens, piercings, cicatrizes
+- Barba/bigode: presença, estilo e tamanho
+- Óculos ou lentes: tipo se houver
+- Contexto: roupa, uniforme, acessórios, fundo — qualquer pista sobre profissão, país ou época
+
+═══ ETAPA 2 — BUSCA NO GOOGLE (use múltiplas estratégias) ═══
+Tente estas buscas em sequência até identificar:
+1. Celebridade brasileira com as características físicas observadas
+2. "ator/atriz brasileiro/a" + cor de cabelo + etnia
+3. "cantor/cantora" + estilo musical aparente + características
+4. "atleta famoso" + esporte visível ou características físicas
+5. "apresentador TV" + emissora visível (Globo, SBT, Record, Band, etc.)
+6. "político brasileiro" + cargo ou características
+7. "influencer/youtuber" + nicho aparente
+8. Para internacionais: busque em inglês "famous [actor/singer/athlete]" + características
+9. Consulte: Wikipedia em PT e EN, IMDb, Globo.com, G1, UOL, Folha, ESPN Brasil
+10. Se não achar na 1ª busca, tente combinações diferentes — NÃO desista
+
+═══ ETAPA 3 — CONFIRMAÇÃO ═══
+Após identificar um candidato, busque pelo nome completo para confirmar com múltiplas fontes antes de aumentar a confiança.
+
+ESCALA DE CONFIANÇA:
+- "Alta" (>85%): Certeza — múltiplas fontes confirmam a mesma pessoa
+- "Média" (55–85%): Provável — ao menos uma fonte indica claramente
+- "Baixa" (<55%): Incerto, suspeita sem confirmação ou pessoa não identificada
+
+RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
 
 {
   "web_info": {
     "identified": true,
     "confidence": "Alta",
-    "confidence_pct": 85,
-    "name": "Nome completo ou Desconhecido",
+    "confidence_pct": 90,
+    "name": "Nome completo ou DESCONHECIDO",
     "occupation": "Profissão",
     "nationality": "Nacionalidade",
-    "born": "Data de nascimento ou idade estimada",
-    "known_for": "Motivo de notoriedade ou traço marcante",
+    "born": "Data de nascimento ou faixa etária estimada",
+    "known_for": "Principal motivo de notoriedade ou traço marcante",
     "summary": "Biografia detalhada com base nos dados encontrados na internet via Google Search",
     "tags": ["tag1", "tag2", "tag3"]
   },
@@ -486,12 +476,12 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     "humor": "Estado emocional aparente",
     "expressao": "Descrição da expressão facial",
     "caracteristicas": "Traços físicos visíveis",
-    "ambiente": "Ambiente ao fundo",
-    "iluminacao": "Tipo de iluminação",
+    "ambiente": "Descrição do ambiente ao fundo",
+    "iluminacao": "Tipo e qualidade da iluminação",
     "postura": "Postura e enquadramento",
     "tags": ["tag1", "tag2", "tag3"]
   }
-}${webContext}`;
+}${webContext}${localContext}`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
 
@@ -506,7 +496,7 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
           ],
         }],
         tools: [{ google_search: {} }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 3000 },
       }),
     });
 
@@ -521,7 +511,6 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
 
     if (!rawText) throw new Error("Resposta vazia do Gemini");
 
-    // Extrai fontes do Google Search grounding
     const groundingSources = (candidate?.groundingMetadata?.groundingChunks || [])
       .map(chunk => ({ url: chunk.web?.uri || "", title: chunk.web?.title || "" }))
       .filter(s => s.url);
@@ -529,12 +518,21 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     if (groundingSources.length > 0)
       log("Google Search: " + groundingSources.length + " fonte(s) encontrada(s)", "ok");
 
-    // Remove marcadores de citação como [1], [2] que o Gemini insere
-    const cleanText = rawText.replace(/\[\d+\]/g, "");
+    const cleanText = rawText.replace(/\[\d+\]/g, "").replace(/```json|```/g, "");
     const match = cleanText.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("Formato de resposta inválido");
 
-    const parsed = JSON.parse(match[0]);
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (_) {
+      // Resposta truncada (MAX_TOKENS) — tenta reparar fechando chaves abertas
+      let txt = match[0];
+      const opens  = (txt.match(/\{/g) || []).length;
+      const closes = (txt.match(/\}/g) || []).length;
+      txt += "}".repeat(Math.max(0, opens - closes));
+      parsed = JSON.parse(txt);
+    }
     parsed._geminiSources = groundingSources;
     return parsed;
   }
@@ -586,12 +584,14 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     canvas.getContext("2d").fillRect(0, 0, 10, 10);
     const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.5));
     const res = await fetch(
-      state.azureFaceEndpoint.replace(/\/$/, "") + "/face/v1.0/detect?returnFaceAttributes=age&detectionModel=detection_01",
+      state.azureFaceEndpoint.replace(/\/$/, "") + "/face/v1.0/detect?detectionModel=detection_01",
       { method: "POST", headers: { "Content-Type": "application/octet-stream", "Ocp-Apim-Subscription-Key": state.azureFaceKey }, body: blob }
     );
     if (res.status === 401 || res.status === 403) {
       const e = await res.json().catch(() => ({}));
-      throw new Error(e?.error?.message || "HTTP " + res.status);
+      const msg = e?.error?.innererror?.message || e?.error?.message || "HTTP " + res.status;
+      if (msg.includes("UnsupportedFeature") || msg.includes("deprecated")) return;
+      throw new Error(msg);
     }
   }
 
@@ -604,8 +604,9 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
     const blob = new Blob([bytes], { type: "image/jpeg" });
 
+    // qualityForRecognition exige recognition_03/04; emotion/age/gender/smile/hair descontinuados
     const url = state.azureFaceEndpoint.replace(/\/$/, "") +
-      "/face/v1.0/detect?returnFaceAttributes=emotion,age,gender,glasses,headPose,smile,facialHair,hair&detectionModel=detection_01";
+      "/face/v1.0/detect?returnFaceAttributes=headPose&detectionModel=detection_01";
 
     const res = await fetch(url, {
       method: "POST",
@@ -617,7 +618,128 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
       throw new Error(e?.error?.message || "HTTP " + res.status);
     }
     const faces = await res.json();
-    return faces.length > 0 ? (faces[0].faceAttributes || null) : null;
+    if (faces.length === 0) return null;
+    // Inclui faceId para identificação no banco local
+    const attrs = Object.assign({}, faces[0].faceAttributes || {});
+    attrs._faceId = faces[0].faceId;
+    return attrs;
+  }
+
+  /* ── Azure PersonGroup (banco local) ─────────────────────── */
+  async function ensurePersonGroupExists() {
+    const base = state.azureFaceEndpoint.replace(/\/$/, "");
+    const url = `${base}/face/v1.0/persongroups/${AZURE_PERSON_GROUP_ID}`;
+    const getRes = await fetch(url, {
+      method: "GET",
+      headers: { "Ocp-Apim-Subscription-Key": state.azureFaceKey },
+    });
+    if (getRes.status === 404) {
+      const createRes = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Ocp-Apim-Subscription-Key": state.azureFaceKey },
+        body: JSON.stringify({ name: "FaceScan Local DB", userData: "" }),
+      });
+      if (!createRes.ok) {
+        const e = await createRes.json().catch(() => ({}));
+        throw new Error(e?.error?.message || "Falha ao criar PersonGroup");
+      }
+      log("PersonGroup criado no Azure", "ok");
+    }
+  }
+
+  async function registerPersonToAzure(name, base64) {
+    const base = state.azureFaceEndpoint.replace(/\/$/, "");
+
+    await ensurePersonGroupExists();
+
+    const createRes = await fetch(
+      `${base}/face/v1.0/persongroups/${AZURE_PERSON_GROUP_ID}/persons`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Ocp-Apim-Subscription-Key": state.azureFaceKey },
+        body: JSON.stringify({ name }),
+      }
+    );
+    if (!createRes.ok) {
+      const e = await createRes.json().catch(() => ({}));
+      throw new Error(e?.error?.message || "Falha ao criar pessoa no Azure");
+    }
+    const { personId } = await createRes.json();
+
+    const byteStr = atob(base64);
+    const bytes = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "image/jpeg" });
+
+    const addFaceRes = await fetch(
+      `${base}/face/v1.0/persongroups/${AZURE_PERSON_GROUP_ID}/persons/${personId}/persistedFaces`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream", "Ocp-Apim-Subscription-Key": state.azureFaceKey },
+        body: blob,
+      }
+    );
+    if (!addFaceRes.ok) {
+      const e = await addFaceRes.json().catch(() => ({}));
+      throw new Error(e?.error?.message || "Falha ao adicionar rosto");
+    }
+
+    // Treina o grupo em background
+    fetch(
+      `${base}/face/v1.0/persongroups/${AZURE_PERSON_GROUP_ID}/train`,
+      { method: "POST", headers: { "Ocp-Apim-Subscription-Key": state.azureFaceKey } }
+    ).then(() => log("Azure PersonGroup: treinamento iniciado", "ok")).catch(() => {});
+
+    return personId;
+  }
+
+  // Compara rosto atual com banco local usando Gemini Vision (independente do Azure)
+  async function identifyFromLocalDB(currentB64) {
+    const db = loadLocalDB();
+    if (db.length === 0) return null;
+    if (!state.geminiKey) return null;
+
+    log("Comparando rosto com banco local (" + db.length + " cadastro(s))...", "ok");
+
+    for (const person of db) {
+      if (!person.imageData) continue;
+      try {
+        const storedB64 = person.imageData.split(",")[1];
+        if (!storedB64) continue;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: 'Compare as duas fotos de rosto. A primeira é o alvo atual, a segunda é do banco de dados. São a MESMA pessoa? Responda SOMENTE com JSON sem markdown: {"same":true,"confidence":85}' },
+                { inline_data: { mime_type: "image/jpeg", data: currentB64 } },
+                { inline_data: { mime_type: "image/jpeg", data: storedB64 } },
+              ],
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 256, thinkingConfig: { thinkingBudget: 0 } },
+          }),
+        });
+
+        if (!res.ok) continue;
+        const data = await res.json();
+        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+        const m = text.match(/\{[\s\S]*?\}/);
+        if (!m) continue;
+
+        const result = JSON.parse(m[0]);
+        const conf = result.confidence ?? 0;
+        log("Banco local — " + person.name + ": " + (result.same ? "MESMA PESSOA" : "diferente") + " (" + conf + "%)", result.same ? "ok" : "");
+
+        if (result.same && conf >= 70) {
+          return { ...person, matchConfidence: conf / 100 };
+        }
+      } catch (_) { continue; }
+    }
+
+    return null;
   }
 
   function getTopEmotion(emotions) {
@@ -647,7 +769,7 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   }
 
   /* ── Popup ────────────────────────────────────────────────── */
-  function renderPopup(data, azure, faceItems, imageData) {
+  function renderPopup(data, azure, faceItems, imageData, localMatch = null) {
     hideLoading();
     const wi = data.web_info || {};
     const st = data.status   || {};
@@ -668,12 +790,28 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     $("popup-name").textContent    = wi.name    || "Desconhecido";
     $("popup-summary").textContent = wi.summary || "—";
 
+    // Banner de match no banco local
+    const localMatchEl = $("popup-local-match");
+    if (localMatchEl) {
+      if (localMatch) {
+        const confPct = Math.round((localMatch.matchConfidence || 0) * 100);
+        localMatchEl.style.display = "flex";
+        localMatchEl.innerHTML = `
+          <i class="bi bi-database-check" aria-hidden="true"></i>
+          <span><strong>BANCO LOCAL:</strong> ${escHtml(localMatch.name)}, ${localMatch.age} anos</span>
+          <span class="tag green" style="margin-left:auto">${confPct}% CONF.</span>`;
+      } else {
+        localMatchEl.style.display = "none";
+      }
+    }
+
     const wiTags = $("popup-tags");
     wiTags.innerHTML = "";
     const tags1 = [...(wi.tags || [])];
     if (wi.confidence) tags1.unshift(wi.confidence + " CONF.");
     if (geminiSources.length > 0) tags1.push("GOOGLE SEARCH");
     if (faceItems && faceItems.length > 0) tags1.push("WEB MATCH");
+    if (localMatch) tags1.push("BANCO LOCAL");
     tags1.slice(0,6).forEach((t, i) => {
       const cls = i===0 ? (wi.confidence==="Alta"?"green":wi.confidence==="Baixa"?"red":"yellow") : "";
       wiTags.innerHTML += `<span class="tag ${cls}">${escHtml(t)}</span>`;
@@ -691,7 +829,15 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
       wiGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
     });
 
-    // ── FONTES (Gemini Search + FaceCheck) ──
+    // Botão de cadastro — aparece somente quando não identificado e sem match local
+    const registerSection = $("popup-register-section");
+    if (registerSection) {
+      const isUnknown = !wi.identified ||
+        (wi.name || "").toLowerCase().replace(/\s/g,"").includes("desconhecid");
+      registerSection.style.display = (isUnknown && !localMatch) ? "block" : "none";
+    }
+
+    // ── FONTES ──
     const allSources = [
       ...geminiSources.map(s => ({ url: s.url, title: s.title, score: null, type: "google" })),
       ...(faceItems || []).slice(0, 4).map(s => ({ url: s.url, title: "", score: s.score, type: "facecheck" })),
@@ -742,33 +888,20 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
       stTags.innerHTML += `<span class="tag yellow">${escHtml(t)}</span>`;
     });
 
-    // ── AZURE BIOMETRIA ──
+    // ── AZURE BIOMETRIA (apenas campos não deprecados) ──
     const nichoAzure = $("nicho-azure");
-    if (azure) {
+    if (azure && azure.headPose) {
       nichoAzure.style.display = "block";
-      const glassesMap = { NoGlasses:"Sem óculos", ReadingGlasses:"Óculos de leitura", Sunglasses:"Óculos de sol", SwimmingGoggles:"Óculos de natação" };
-      const genderMap  = { male:"Masculino", female:"Feminino" };
-      const poseDesc   = azure.headPose
-        ? `Yaw ${azure.headPose.yaw.toFixed(0)}° / Pitch ${azure.headPose.pitch.toFixed(0)}° / Roll ${azure.headPose.roll.toFixed(0)}°`
-        : "—";
+      const poseDesc = `Yaw ${azure.headPose.yaw.toFixed(0)}° / Pitch ${azure.headPose.pitch.toFixed(0)}° / Roll ${azure.headPose.roll.toFixed(0)}°`;
       const azGrid = $("popup-azure-grid");
       azGrid.innerHTML = "";
       [
-        { label:"🎭 EMOÇÃO DOMINANTE", value: getTopEmotion(azure.emotion) },
-        { label:"🎂 IDADE ESTIMADA",   value: azure.age !== undefined ? Math.round(azure.age) + " anos" : "—" },
-        { label:"⚧ GÊNERO",           value: genderMap[azure.gender] || azure.gender || "—" },
-        { label:"😁 SORRISO",          value: azure.smile !== undefined ? Math.round(azure.smile * 100) + "%" : "—" },
-        { label:"👓 ÓCULOS",           value: glassesMap[azure.glasses] || azure.glasses || "—" },
-        { label:"💇 CABELO",           value: getHairDescription(azure.hair) },
-        { label:"🧔 PELOS FACIAIS",    value: getFacialHairDesc(azure.facialHair) },
-        { label:"📐 POSE DA CABEÇA",   value: poseDesc },
+        { label:"📐 POSE DA CABEÇA", value: poseDesc },
       ].forEach(dp => {
         azGrid.innerHTML += `<div class="info-item"><div class="info-item-label">${escHtml(dp.label)}</div><div class="info-item-value">${escHtml(dp.value)}</div></div>`;
       });
       const azTags = $("popup-azure-tags");
-      azTags.innerHTML = "";
-      ["AZURE REAL", genderMap[azure.gender] || azure.gender]
-        .filter(Boolean).forEach(t => { azTags.innerHTML += `<span class="tag yellow">${escHtml(t)}</span>`; });
+      azTags.innerHTML = '<span class="tag yellow">AZURE DETECT</span>';
     } else {
       nichoAzure.style.display = "none";
     }
@@ -791,6 +924,10 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     $("conf-val").textContent = "0%"; $("conf-fill").style.width = "0%";
     setPopupMeta(["—"]);
     $("popup-timestamp").textContent = new Date().toLocaleString("pt-BR");
+    const localMatchEl = $("popup-local-match");
+    if (localMatchEl) localMatchEl.style.display = "none";
+    const registerSection = $("popup-register-section");
+    if (registerSection) registerSection.style.display = "none";
     $("result-popup").classList.add("active");
     document.body.classList.add("modal-open");
   }
@@ -798,6 +935,88 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   function closePopup() {
     $("result-popup").classList.remove("active");
     document.body.classList.remove("modal-open");
+  }
+
+  /* ── Modal de Cadastro ────────────────────────────────────── */
+  function openRegisterModal() {
+    const modal = $("register-modal");
+    if (!modal) return;
+    const photo = $("register-photo");
+    if (photo) photo.src = state.lastCapture || "";
+    const nameEl = $("register-name");
+    const ageEl  = $("register-age");
+    if (nameEl) nameEl.value = "";
+    if (ageEl)  ageEl.value  = "";
+    const errEl = $("register-error");
+    const sucEl = $("register-success");
+    if (errEl) errEl.style.display = "none";
+    if (sucEl) sucEl.style.display = "none";
+    const btn = $("register-submit-btn");
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-person-check" aria-hidden="true"></i> CADASTRAR'; }
+    modal.classList.add("active");
+  }
+
+  function closeRegisterModal() {
+    const modal = $("register-modal");
+    if (modal) modal.classList.remove("active");
+  }
+
+  async function submitRegister() {
+    const name   = ($("register-name")?.value || "").trim();
+    const ageVal = ($("register-age")?.value  || "").trim();
+    const age    = parseInt(ageVal, 10);
+    const errEl  = $("register-error");
+
+    if (errEl) errEl.style.display = "none";
+
+    if (!name) {
+      if (errEl) { errEl.textContent = "Por favor, informe o nome completo."; errEl.style.display = "block"; }
+      return;
+    }
+    if (!ageVal || isNaN(age) || age < 1 || age > 120) {
+      if (errEl) { errEl.textContent = "Por favor, informe uma idade válida (1–120)."; errEl.style.display = "block"; }
+      return;
+    }
+
+    const btn = $("register-submit-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> CADASTRANDO...'; }
+
+    const b64 = state.lastCapture ? state.lastCapture.split(",")[1] : null;
+    let azurePersonId = null;
+    let azureRegistered = false;
+
+    if (b64 && state.azureFaceKey && state.azureFaceKey !== "SUA_CHAVE_AZURE_AQUI") {
+      try {
+        azurePersonId = await registerPersonToAzure(name, b64);
+        azureRegistered = true;
+        log("Azure PersonGroup: " + name + " registrado com sucesso", "ok");
+      } catch (err) {
+        log("Azure PersonGroup indisponível (" + err.message + ") — usando verify direto no próximo scan", "warn");
+      }
+    }
+
+    const db = loadLocalDB();
+    db.push({
+      id: (window.crypto?.randomUUID?.()) || String(Date.now()),
+      azurePersonId: azurePersonId || null,
+      name,
+      age,
+      imageData: state.lastCapture || "",
+      registeredAt: new Date().toISOString(),
+    });
+    saveLocalDB(db);
+
+    const sucEl = $("register-success");
+    if (sucEl) {
+      sucEl.style.display = "flex";
+      sucEl.innerHTML = azureRegistered
+        ? '<i class="bi bi-check-circle" aria-hidden="true"></i> Cadastrado com reconhecimento automático!'
+        : '<i class="bi bi-check-circle" aria-hidden="true"></i> Cadastrado! Reconhecimento por comparação de rosto.';
+    }
+    if (btn) btn.innerHTML = '<i class="bi bi-check-circle" aria-hidden="true"></i> CADASTRADO!';
+    log("Usuário cadastrado: " + name + ", " + age + " anos" + (azureRegistered ? " (Azure)" : " (local)"), "ok");
+
+    setTimeout(() => closeRegisterModal(), 2000);
   }
 
   function setPopupMeta(items) {
@@ -839,16 +1058,13 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   /* ── Log ──────────────────────────────────────────────────── */
   function log(msg, type = "") {
     const time = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
-    
-    // Salva no histórico para a página dedicada de logs
+
     state.logEntries.push({ time, msg, type });
 
-    // Limita o histórico na memória a 50 itens
     if (state.logEntries.length > 50) {
       state.logEntries.shift();
     }
 
-    // Atualiza as caixas de log ativas na tela anexando a nova linha (como era no original)
     const areas = document.querySelectorAll(".log-area");
     areas.forEach(area => {
       const line = document.createElement("div");
@@ -857,7 +1073,6 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
       area.appendChild(line);
       area.scrollTop = area.scrollHeight;
 
-      // Mantém apenas os últimos 50 elementos visíveis no DOM
       while (area.children.length > 50) {
         area.removeChild(area.firstChild);
       }
@@ -869,12 +1084,10 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
     if (areas.length === 0) return;
 
     areas.forEach(area => {
-      // Garante que a mensagem [INIT] original permaneça fixa ao carregar/recarregar a tela
       let html = `<div class="log-line"><span class="log-time">[INIT]</span><span class="log-text ok">Sistema carregado</span></div>`;
 
-      // Adiciona o histórico salvo abaixo do [INIT]
       if (state.logEntries.length > 0) {
-        html += state.logEntries.map(entry => 
+        html += state.logEntries.map(entry =>
           `<div class="log-line"><span class="log-time">[${entry.time}]</span><span class="log-text ${entry.type}">${escHtml(entry.msg)}</span></div>`
         ).join("");
       }
@@ -883,6 +1096,7 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
       area.scrollTop = area.scrollHeight;
     });
   }
+
   /* ── Reset ────────────────────────────────────────────────── */
   function resetSession() {
     $("target-preview").style.display = "none";
@@ -907,63 +1121,25 @@ Retorne SOMENTE JSON válido, sem markdown, com exatamente esta estrutura:
   function escHtml(s)      { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  document.addEventListener("keydown", e => { if (e.key==="Escape") closePopup(); if (e.key==="Enter"&&state.setupMode==="startup") init(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closePopup(); closeRegisterModal(); }
+    if (e.key === "Enter" && state.setupMode === "startup") init();
+  });
   document.addEventListener("click", e => {
     const popup = $("result-popup");
     if (popup && e.target === popup) closePopup();
+    const regModal = $("register-modal");
+    if (regModal && e.target === regModal) closeRegisterModal();
   });
 
   state.analysisHistory = loadHistoryEntries();
 
-  return { init, scanFace, resetSession, closePopup, openSettingsPage, openLogPage, openHistoryPage, openMainPage, renderLogArea, persistAnalysisHistory };
+  return {
+    init, scanFace, resetSession, closePopup,
+    openLogPage, openHistoryPage, openMainPage,
+    renderLogArea, persistAnalysisHistory,
+    openRegisterModal, closeRegisterModal, submitRegister,
+  };
 
 })();
 
-function refreshConfigStatusPanel() {
-  const box = document.getElementById("key-status-display");
-  const btn = document.getElementById("start-btn");
-
-  if (typeof ENV === "undefined" || !ENV.GEMINI_API_KEY) {
-    if (box) box.textContent = "⚠ ENV não encontrado — verifique config/config.js";
-    if (box) box.style.color = "var(--red)";
-    if (btn) btn.disabled = true;
-    return;
-  }
-  if (ENV.GEMINI_API_KEY === "SUA_CHAVE_GEMINI_AQUI" || ENV.GEMINI_API_KEY.length < 20) {
-    if (box) box.textContent = "⚠ Chave Gemini não configurada — edite config/config.js";
-    if (box) box.style.color = "var(--yellow)";
-    if (btn) btn.disabled = true;
-    return;
-  }
-
-  const masked = ENV.GEMINI_API_KEY.slice(0,6) + "••••••••" + ENV.GEMINI_API_KEY.slice(-4);
-  if (box) box.textContent = "✓ Gemini API detectada (" + masked + ")";
-  if (box) box.style.color = "var(--green)";
-
-  const azBox = document.getElementById("azure-status-display");
-  if (azBox) {
-    if (ENV.AZURE_FACE_KEY && ENV.AZURE_FACE_KEY !== "SUA_CHAVE_AZURE_AQUI") {
-      azBox.textContent = "✓ Azure Face configurado";
-      azBox.style.color = "var(--green)";
-    } else {
-      azBox.textContent = "⚠ Azure Face não configurado";
-      azBox.style.color = "var(--yellow)";
-    }
-  }
-
-  const fcBox = document.getElementById("facecheck-status-display");
-  if (fcBox) {
-    if (ENV.FACECHECK_API_KEY && ENV.FACECHECK_API_KEY !== "SUA_CHAVE_FACECHECK_AQUI") {
-      fcBox.textContent = "✓ FaceCheck.ID configurado";
-      fcBox.style.color = "var(--green)";
-    } else {
-      fcBox.textContent = "⚠ FaceCheck.ID não configurado";
-      fcBox.style.color = "var(--yellow)";
-    }
-  }
-}
-
-/* Verifica config ao carregar */
-document.addEventListener("DOMContentLoaded", () => {
-  refreshConfigStatusPanel();
-});
