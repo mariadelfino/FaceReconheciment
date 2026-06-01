@@ -6,16 +6,11 @@ const FirebaseDB = (() => {
     return { loadAll: async () => [], savePerson: async () => null, deletePerson: async () => {} };
   }
 
-  const _config = (typeof FIREBASE_CONFIG !== "undefined" && FIREBASE_CONFIG.projectId)
-    ? FIREBASE_CONFIG
-    : {
-        apiKey:            "AIzaSyCnJx12F-4NgUffGXFS0s0rF5AtUMuI2xs",
-        authDomain:        "facescan-ed497.firebaseapp.com",
-        projectId:         "facescan-ed497",
-        storageBucket:     "facescan-ed497.firebasestorage.app",
-        messagingSenderId: "151691520653",
-        appId:             "1:151691520653:web:547c2f9b4122dd2dd610c4",
-      };
+  if (typeof FIREBASE_CONFIG === "undefined" || !FIREBASE_CONFIG.projectId) {
+    console.error("FirebaseDB: FIREBASE_CONFIG não encontrado. Verifique config/config.js");
+    return { loadAll: async () => [], savePerson: async () => null, deletePerson: async () => {} };
+  }
+  const _config = FIREBASE_CONFIG;
 
   if (!firebase.apps.length) {
     firebase.initializeApp(_config);
