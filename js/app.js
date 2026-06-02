@@ -402,40 +402,32 @@ const App = (() => {
       localContext = `\n\nIMPORTANTE — BANCO DE DADOS LOCAL: Esta pessoa foi cadastrada localmente com o nome "${localMatch.name}" (${localMatch.age} anos). Busque especificamente por "${localMatch.name}" para confirmar e enriquecer o perfil.`;
     }
 
-    const prompt = `Você é um sistema especializado em identificação de pessoas públicas e análise OSINT (Open Source Intelligence).
+    const prompt = `Você é um sistema de análise OSINT que identifica APENAS pessoas publicamente famosas.
 
-OBJETIVO: Identificar com máxima precisão quem é a pessoa nesta imagem usando Google Search.
+REGRA PRINCIPAL: A grande maioria das pessoas escaneadas NÃO é famosa. Se não houver evidência clara e confirmada de que a pessoa é uma figura pública conhecida, retorne identified: false com confidence_pct baixo. É muito melhor dizer "não sei" do que inventar uma identidade errada.
 
-═══ ETAPA 1 — ANÁLISE VISUAL (obrigatória antes de buscar) ═══
-Observe atentamente e anote:
-- Gênero, faixa etária estimada (±5 anos), etnia/origem aparente
-- Cabelo: cor, comprimento, textura, estilo (liso, crespo, ondulado, raspado, tingido, etc.)
-- Formato do rosto, sobrancelhas, olhos, nariz, lábios — traços marcantes
-- Tom de pele, marcas visíveis, tatuagens, piercings, cicatrizes
-- Barba/bigode: presença, estilo e tamanho
-- Óculos ou lentes: tipo se houver
-- Contexto: roupa, uniforme, acessórios, fundo — qualquer pista sobre profissão, país ou época
+═══ ETAPA 1 — ANÁLISE VISUAL ═══
+Observe e anote características físicas objetivas:
+- Gênero, faixa etária (±5 anos), etnia aparente
+- Cabelo: cor, comprimento, textura
+- Traços marcantes: formato do rosto, olhos, nariz
+- Contexto: roupa, ambiente, acessórios
 
-═══ ETAPA 2 — BUSCA NO GOOGLE (use múltiplas estratégias) ═══
-Tente estas buscas em sequência até identificar:
-1. Celebridade brasileira com as características físicas observadas
-2. "ator/atriz brasileiro/a" + cor de cabelo + etnia
-3. "cantor/cantora" + estilo musical aparente + características
-4. "atleta famoso" + esporte visível ou características físicas
-5. "apresentador TV" + emissora visível (Globo, SBT, Record, Band, etc.)
-6. "político brasileiro" + cargo ou características
-7. "influencer/youtuber" + nicho aparente
-8. Para internacionais: busque em inglês "famous [actor/singer/athlete]" + características
-9. Consulte: Wikipedia em PT e EN, IMDb, Globo.com, G1, UOL, Folha, ESPN Brasil
-10. Se não achar na 1ª busca, tente combinações diferentes — NÃO desista
+═══ ETAPA 2 — BUSCA NO GOOGLE (apenas se houver indício real) ═══
+SÓ busque por nome/identidade se a imagem tiver algum destes indicadores:
+- Uniforme, crachá, logotipo, cenário profissional reconhecível
+- Características físicas muito marcantes e específicas de alguém famoso
+- Contexto claramente público (palco, evento, entrevista)
 
-═══ ETAPA 3 — CONFIRMAÇÃO ═══
-Após identificar um candidato, busque pelo nome completo para confirmar com múltiplas fontes antes de aumentar a confiança.
+Se a imagem mostrar uma pessoa comum em ambiente doméstico/cotidiano, NÃO tente identificar pelo nome — retorne identified: false diretamente.
 
-ESCALA DE CONFIANÇA:
-- "Alta" (>85%): Certeza — múltiplas fontes confirmam a mesma pessoa
-- "Média" (55–85%): Provável — ao menos uma fonte indica claramente
-- "Baixa" (<55%): Incerto, suspeita sem confirmação ou pessoa não identificada
+Quando buscar, confirme em pelo menos 2 fontes independentes antes de marcar como identificado.
+
+═══ ESCALA DE CONFIANÇA ═══
+- "Alta" (>85%): Múltiplas fontes confirmam com certeza — pessoa claramente famosa
+- "Média" (55–85%): Uma fonte indica, características batem bem
+- "Baixa" (<55%): Incerto — use este nível se não tiver certeza real
+- Se não identificou: confidence_pct máximo de 30, identified: false, name: "DESCONHECIDO"
 
 RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
 
