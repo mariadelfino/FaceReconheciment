@@ -17,6 +17,7 @@ jobs:
           FACECHECK_API_KEY: ${{ secrets.FACECHECK_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
         run: |
+          mkdir -p config
           {
             echo 'const ENV = {'
             echo "  GEMINI_API_KEY:      \"$GEMINI_API_KEY\","
