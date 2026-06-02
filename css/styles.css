@@ -1635,6 +1635,16 @@ transform: scaleX(-1);
   letter-spacing: 0.06em;
 }
 
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+
 .register-form {
   flex: 1;
   display: flex;
@@ -1740,21 +1750,71 @@ transform: scaleX(-1);
    RESPONSIVE
 ───────────────────────────── */
 @media (max-width: 900px) {
+  /* Sidebar vira bottom nav bar fixada no rodapé */
   .app-shell { flex-direction: column; }
+
   .sidebar {
     width: 100%;
     flex-basis: auto;
-    position: relative;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     top: auto;
-    align-self: stretch;
-    overflow-y: visible;
+    z-index: 50;
+    min-height: unset;
+    padding: 0;
     border-right: none;
-    border-bottom: 1px solid rgba(214,216,220,0.8);
+    border-top: 1px solid rgba(214,216,220,0.8);
+    border-bottom: none;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    overflow-y: visible;
+    border-radius: 0;
+    backdrop-filter: blur(16px);
+    background: rgba(255,255,255,0.96);
   }
-  .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
-  .sidebar-item { flex: 1 1 180px; }
-  .sidebar-status-card { margin-top: 0; }
-  .app-content { padding: 18px; }
+
+  .sidebar-brand { display: none; }
+  .sidebar-status-card { display: none; }
+
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 0;
+  }
+
+  .sidebar-item {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 6px 12px;
+    border-radius: 0;
+    font-size: 0.62rem;
+    border: none;
+    border-top: 2px solid transparent;
+  }
+
+  .sidebar-item.active {
+    border-top-color: var(--brand-green);
+    box-shadow: none;
+  }
+
+  .sidebar-item:hover { transform: none; }
+
+  .sidebar-icon { width: 20px; height: 20px; }
+  .sidebar-icon i { font-size: 1.15rem; }
+
+  /* Empurra o conteúdo pra cima para não ficar atrás da bottom nav */
+  .app-content {
+    padding: 18px;
+    padding-bottom: 80px;
+  }
+
   .app-grid { grid-template-columns: 1fr; }
   .history-grid { grid-template-columns: 1fr; }
   .settings-card,
@@ -1762,17 +1822,16 @@ transform: scaleX(-1);
     padding: 28px;
     border-radius: 26px;
   }
-  .history-modal {
-    padding: 16px;
-  }
-  .history-modal-card {
-    max-height: calc(100vh - 32px);
-  }
-  #result-popup {
-    padding: 16px;
-  }
-  .popup-card {
-    max-height: calc(100vh - 32px);
+  .history-modal { padding: 16px; }
+  .history-modal-card { max-height: calc(100vh - 32px); }
+  #result-popup { padding: 16px; }
+  .popup-card { max-height: calc(100vh - 32px); }
+  .settings-hero h1 { font-size: 1.6rem; }
+  .popup-footer {
+    padding: 14px 20px;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
   }
 }
 
@@ -1780,15 +1839,34 @@ transform: scaleX(-1);
   .popup-body      { grid-template-columns: 1fr; }
   .popup-photo-col { border-right: none; border-bottom: 1px solid var(--border-soft); }
   .info-grid       { grid-template-columns: 1fr; }
-  .popup-data-col  { padding: 20px 18px; }
-  .setup-card      { padding: 36px 28px; }
-  .sidebar         { padding: 20px 16px 16px; }
-  .sidebar-nav     { flex-direction: column; }
+  .popup-data-col  { padding: 16px; }
+  .setup-card      { padding: 32px 20px; }
+  .sidebar-nav     { flex-direction: row; }
   .sidebar-item    { flex: 1 1 auto; }
-  .history-modal {
-    padding: 12px;
-  }
-  #result-popup {
-    padding: 12px;
-  }
+  .history-modal   { padding: 12px; }
+  #result-popup    { padding: 10px; }
+  .popup-card      { border-radius: 20px; }
+  .popup-header    { padding: 16px 20px; }
+  .popup-title     { font-size: 0.85rem; gap: 10px; }
+  .person-name     { font-size: 1.25rem; }
+  .settings-hero h1 { font-size: 1.35rem; }
+  .setup-title     { font-size: 1.25rem; }
+  .scan-btn-wrapper { flex-direction: column; }
+  .scan-btn, .reset-btn { width: 100%; }
+
+  /* Garante padding-bottom em todas as telas com conteúdo */
+  .log-content,
+  .history-content,
+  .settings-content { padding-bottom: 80px; }
+}
+
+@media (max-width: 400px) {
+  .setup-card      { padding: 24px 16px; border-radius: 20px; }
+  .app-content     { padding: 12px; }
+  .sidebar         { padding: 14px 12px; }
+  .popup-header    { padding: 14px 16px; }
+  .popup-data-col  { padding: 12px; }
+  .register-modal-card { border-radius: 16px; }
+  .register-modal-body { padding: 16px; gap: 16px; }
+  .settings-hero h1 { font-size: 1.2rem; }
 }
