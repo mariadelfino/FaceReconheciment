@@ -10,26 +10,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Gerar config.js a partir dos secrets
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AZURE_FACE_KEY: ${{ secrets.AZURE_FACE_KEY }}
+          AZURE_FACE_ENDPOINT: ${{ secrets.AZURE_FACE_ENDPOINT }}
+          FACECHECK_API_KEY: ${{ secrets.FACECHECK_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
         run: |
-          cat > config/config.js << 'ENDOFFILE'
-          const ENV = {
-            GEMINI_API_KEY:      "${{ secrets.GEMINI_API_KEY }}",
-            AZURE_FACE_KEY:      "${{ secrets.AZURE_FACE_KEY }}",
-            AZURE_FACE_ENDPOINT: "${{ secrets.AZURE_FACE_ENDPOINT }}",
-            FACECHECK_API_KEY:   "${{ secrets.FACECHECK_API_KEY }}",
-          };
-          Object.freeze(ENV);
-
-          const FIREBASE_CONFIG = {
-            apiKey:            "${{ secrets.FIREBASE_API_KEY }}",
-            authDomain:        "facescan-ed497.firebaseapp.com",
-            projectId:         "facescan-ed497",
-            storageBucket:     "facescan-ed497.firebasestorage.app",
-            messagingSenderId: "151691520653",
-            appId:             "1:151691520653:web:547c2f9b4122dd2dd610c4",
-          };
-          Object.freeze(FIREBASE_CONFIG);
-          ENDOFFILE
+          {
+            echo 'const ENV = {'
+            echo "  GEMINI_API_KEY:      \"$GEMINI_API_KEY\","
+            echo "  AZURE_FACE_KEY:      \"$AZURE_FACE_KEY\","
+            echo "  AZURE_FACE_ENDPOINT: \"$AZURE_FACE_ENDPOINT\","
+            echo "  FACECHECK_API_KEY:   \"$FACECHECK_API_KEY\","
+            echo '};'
+            echo 'Object.freeze(ENV);'
+            echo ''
+            echo 'const FIREBASE_CONFIG = {'
+            echo "  apiKey:            \"$FIREBASE_API_KEY\","
+            echo '  authDomain:        "facescan-ed497.firebaseapp.com",'
+            echo '  projectId:         "facescan-ed497",'
+            echo '  storageBucket:     "facescan-ed497.firebasestorage.app",'
+            echo '  messagingSenderId: "151691520653",'
+            echo '  appId:             "1:151691520653:web:547c2f9b4122dd2dd610c4",'
+            echo '};'
+            echo 'Object.freeze(FIREBASE_CONFIG);'
+          } > config/config.js
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
