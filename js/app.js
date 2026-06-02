@@ -54,7 +54,6 @@ const App = (() => {
   };
 
   const HISTORY_STORAGE_KEY = "facescan-analysis-history";
-  const LOCAL_DB_STORAGE_KEY = "facescan-local-db";
   const AZURE_PERSON_GROUP_ID = "facescan-localdb";
 
   /* ── History ──────────────────────────────────────────────── */
@@ -89,23 +88,6 @@ const App = (() => {
     state.analysisHistory = [nextEntry, ...state.analysisHistory].slice(0, 20);
     saveHistoryEntries(state.analysisHistory);
     return nextEntry;
-  }
-
-  /* ── Local DB ─────────────────────────────────────────────── */
-  function loadLocalDB() {
-    try {
-      const raw = localStorage.getItem(LOCAL_DB_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_) { return []; }
-  }
-
-  function saveLocalDB(persons) {
-    try { localStorage.setItem(LOCAL_DB_STORAGE_KEY, JSON.stringify(persons)); } catch (_) {}
-  }
-
-  function getLocalDBPersonById(azurePersonId) {
-    return loadLocalDB().find(p => p.azurePersonId === azurePersonId) || null;
   }
 
   /* ── Helpers ──────────────────────────────────────────────── */
@@ -361,12 +343,10 @@ const App = (() => {
 
       // Tenta identificar no banco local antes do Gemini (usa Gemini Vision para comparar rostos)
       let localMatch = null;
-      if (loadLocalDB().length > 0) {
-        try {
-          localMatch = await identifyFromLocalDB(b64);
-          if (localMatch) log("Banco local: " + localMatch.name + " reconhecido!", "ok");
-        } catch (_) {}
-      }
+      try {
+        localMatch = await identifyFromLocalDB(b64);
+        if (localMatch) log("Banco local: " + localMatch.name + " reconhecido!", "ok");
+      } catch (_) {}
 
       setLoadingStep(3);
       log("Gemini pesquisando no Google...", "ok");
@@ -695,7 +675,7 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
 
   // Compara rosto atual com banco local usando Gemini Vision (independente do Azure)
   async function identifyFromLocalDB(currentB64) {
-    const db = loadLocalDB();
+    const db = await FirebaseDB.loadAll();
     if (db.length === 0) return null;
     if (!state.geminiKey) return null;
 
@@ -943,10 +923,10 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
     if (!modal) return;
     const photo = $("register-photo");
     if (photo) photo.src = state.lastCapture || "";
-    const nameEl = $("register-name");
-    const ageEl  = $("register-age");
-    if (nameEl) nameEl.value = "";
-    if (ageEl)  ageEl.value  = "";
+    ["register-name","register-nickname","register-age","register-birthday",
+     "register-profession","register-company","register-city","register-relation","register-notes"].forEach(id => {
+      const el = $(id); if (el) el.value = "";
+    });
     const errEl = $("register-error");
     const sucEl = $("register-success");
     if (errEl) errEl.style.display = "none";
@@ -962,10 +942,17 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
   }
 
   async function submitRegister() {
-    const name   = ($("register-name")?.value || "").trim();
-    const ageVal = ($("register-age")?.value  || "").trim();
-    const age    = parseInt(ageVal, 10);
-    const errEl  = $("register-error");
+    const name       = ($("register-name")?.value       || "").trim();
+    const nickname   = ($("register-nickname")?.value   || "").trim();
+    const ageVal     = ($("register-age")?.value        || "").trim();
+    const age        = parseInt(ageVal, 10);
+    const birthday   = ($("register-birthday")?.value   || "").trim();
+    const profession = ($("register-profession")?.value || "").trim();
+    const company    = ($("register-company")?.value    || "").trim();
+    const city       = ($("register-city")?.value       || "").trim();
+    const relation   = ($("register-relation")?.value   || "").trim();
+    const notes      = ($("register-notes")?.value      || "").trim();
+    const errEl      = $("register-error");
 
     if (errEl) errEl.style.display = "none";
 
@@ -995,16 +982,21 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
       }
     }
 
-    const db = loadLocalDB();
-    db.push({
+    await FirebaseDB.savePerson({
       id: (window.crypto?.randomUUID?.()) || String(Date.now()),
       azurePersonId: azurePersonId || null,
       name,
+      nickname:   nickname   || null,
       age,
+      birthday:   birthday   || null,
+      profession: profession || null,
+      company:    company    || null,
+      city:       city       || null,
+      relation:   relation   || null,
+      notes:      notes      || null,
       imageData: state.lastCapture || "",
       registeredAt: new Date().toISOString(),
     });
-    saveLocalDB(db);
 
     const sucEl = $("register-success");
     if (sucEl) {
@@ -1014,7 +1006,8 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
         : '<i class="bi bi-check-circle" aria-hidden="true"></i> Cadastrado! Reconhecimento por comparação de rosto.';
     }
     if (btn) btn.innerHTML = '<i class="bi bi-check-circle" aria-hidden="true"></i> CADASTRADO!';
-    log("Usuário cadastrado: " + name + ", " + age + " anos" + (azureRegistered ? " (Azure)" : " (local)"), "ok");
+    const extras = [profession, company, city, relation, birthday].filter(Boolean).join(", ");
+    log("Usuário cadastrado: " + name + ", " + age + " anos" + (extras ? " — " + extras : "") + (azureRegistered ? " (Azure)" : ""), "ok");
 
     setTimeout(() => closeRegisterModal(), 2000);
   }

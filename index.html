@@ -245,13 +245,56 @@
           <div class="register-photo-label">FOTO CAPTURADA</div>
         </div>
         <div class="register-form">
-          <div class="form-group">
-            <label class="field-label" for="register-name">NOME COMPLETO</label>
-            <input type="text" id="register-name" class="form-input" placeholder="Ex: João Silva" maxlength="100" autocomplete="off" />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="register-name">NOME COMPLETO *</label>
+              <input type="text" id="register-name" class="form-input" placeholder="Ex: João Silva" maxlength="100" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="register-nickname">APELIDO</label>
+              <input type="text" id="register-nickname" class="form-input" placeholder="Ex: Jão" maxlength="50" autocomplete="off" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="register-age">IDADE *</label>
+              <input type="number" id="register-age" class="form-input" placeholder="Ex: 28" min="1" max="120" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="register-birthday">ANIVERSÁRIO</label>
+              <input type="date" id="register-birthday" class="form-input" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="register-profession">PROFISSÃO</label>
+              <input type="text" id="register-profession" class="form-input" placeholder="Ex: Engenheira" maxlength="80" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="register-company">EMPRESA / ESCOLA</label>
+              <input type="text" id="register-company" class="form-input" placeholder="Ex: Google" maxlength="80" autocomplete="off" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="register-city">CIDADE</label>
+              <input type="text" id="register-city" class="form-input" placeholder="Ex: São Paulo" maxlength="80" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="register-relation">RELAÇÃO</label>
+              <select id="register-relation" class="form-input">
+                <option value="">Selecione...</option>
+                <option value="Amigo(a)">Amigo(a)</option>
+                <option value="Familiar">Familiar</option>
+                <option value="Colega de trabalho">Colega de trabalho</option>
+                <option value="Conhecido(a)">Conhecido(a)</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
-            <label class="field-label" for="register-age">IDADE</label>
-            <input type="number" id="register-age" class="form-input" placeholder="Ex: 28" min="1" max="120" />
+            <label class="field-label" for="register-notes">OBSERVAÇÕES</label>
+            <textarea id="register-notes" class="form-input" placeholder="Informações adicionais sobre a pessoa..." maxlength="300" rows="2" style="resize:vertical"></textarea>
           </div>
           <div id="register-error" class="error-msg" style="margin-top:0; padding-top:10px"></div>
           <div id="register-success" class="register-success-msg" style="display:none">
@@ -261,14 +304,18 @@
             <i class="bi bi-person-check" aria-hidden="true"></i> CADASTRAR
           </button>
           <p class="hint" style="margin-top:8px; text-align:left">
-            Apenas nome e idade são salvos. Nenhum dado sensível é coletado.
+            Campos com * são obrigatórios. Nenhum dado sensível é coletado.
           </p>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
   <script src="config/config.js"></script>
+  <script src="js/firebase-db.js"></script>
   <script src="js/sidebar-loader.js"></script>
 
   <script src="js/historico.js"></script>
