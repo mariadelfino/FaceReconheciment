@@ -757,18 +757,23 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
 
     $("popup-photo").src = imageData;
 
-    const pct = wi.confidence_pct || (wi.confidence === "Alta" ? 88 : wi.confidence === "Média" ? 60 : 35);
+    const isUnknownName = !wi.name || wi.name.toLowerCase().replace(/\s/g,"").includes("desconhecid");
+    const displayName   = (localMatch && isUnknownName) ? localMatch.name : (wi.name || "Desconhecido");
+
+    const geminiPct = wi.confidence_pct || (wi.confidence === "Alta" ? 88 : wi.confidence === "Média" ? 60 : 35);
+    const localPct  = localMatch ? Math.round((localMatch.matchConfidence || 0) * 100) : 0;
+    const pct = (localMatch && isUnknownName) ? Math.max(geminiPct, localPct) : geminiPct;
     $("conf-val").textContent = pct + "%";
     setTimeout(() => ($("conf-fill").style.width = pct + "%"), 100);
 
     setPopupMeta([
-      wi.occupation || "—",
+      wi.occupation || (localMatch?.profession) || "—",
       wi.nationality || "—",
-      wi.born || "—",
+      wi.born || (localMatch?.age ? localMatch.age + " anos" : "—"),
     ]);
 
-    $("popup-name").textContent    = wi.name    || "Desconhecido";
-    $("popup-summary").textContent = wi.summary || "—";
+    $("popup-name").textContent    = displayName;
+    $("popup-summary").textContent = wi.summary || (localMatch ? `Cadastrado no banco local. ${[localMatch.profession, localMatch.company, localMatch.city, localMatch.relation].filter(Boolean).join(" · ")}` : "—");
 
     // Banner de match no banco local
     const localMatchEl = $("popup-local-match");
