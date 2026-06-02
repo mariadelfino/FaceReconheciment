@@ -251,30 +251,29 @@
               <input type="text" id="register-name" class="form-input" placeholder="Ex: João Silva" maxlength="100" autocomplete="off" />
             </div>
             <div class="form-group">
-              <label class="field-label" for="register-age">IDADE *</label>
-              <input type="number" id="register-age" class="form-input" placeholder="Ex: 28" min="1" max="120" />
+              <label class="field-label" for="register-nickname">APELIDO</label>
+              <input type="text" id="register-nickname" class="form-input" placeholder="Ex: Jão" maxlength="50" autocomplete="off" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="field-label" for="register-relation">RELAÇÃO</label>
-              <select id="register-relation" class="form-input">
-                <option value="">Selecione...</option>
-                <option value="Amigo(a)">Amigo(a)</option>
-                <option value="Familiar">Familiar</option>
-                <option value="Colega de trabalho">Colega de trabalho</option>
-                <option value="Conhecido(a)">Conhecido(a)</option>
-                <option value="Outro">Outro</option>
-              </select>
+              <label class="field-label" for="register-age">IDADE *</label>
+              <input type="number" id="register-age" class="form-input" placeholder="Ex: 28" min="1" max="120" />
             </div>
+            <div class="form-group">
+              <label class="field-label" for="register-birthday">ANIVERSÁRIO</label>
+              <input type="date" id="register-birthday" class="form-input" />
+            </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label class="field-label" for="register-profession">PROFISSÃO</label>
               <input type="text" id="register-profession" class="form-input" placeholder="Ex: Engenheira" maxlength="80" autocomplete="off" />
             </div>
-          </div>
-          <div class="form-group">
-            <label class="field-label" for="register-notes">OBSERVAÇÕES</label>
-            <textarea id="register-notes" class="form-input" placeholder="Ex: cabelo preto, mora em SP..." maxlength="300" rows="2" style="resize:vertical"></textarea>
+            <div class="form-group">
+              <label class="field-label" for="register-city">CIDADE</label>
+              <input type="text" id="register-city" class="form-input" placeholder="Ex: São Paulo" maxlength="80" autocomplete="off" />
+            </div>
           </div>
           <div id="register-error" class="error-msg" style="margin-top:0; padding-top:10px"></div>
           <div id="register-success" class="register-success-msg" style="display:none">
