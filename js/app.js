@@ -438,11 +438,11 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
   }
 }${webContext}${localContext}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": state.geminiKey },
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -677,10 +677,10 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
         }
       });
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": state.geminiKey },
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 64, thinkingConfig: { thinkingBudget: 0 } },
