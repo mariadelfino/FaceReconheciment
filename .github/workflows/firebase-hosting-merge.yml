@@ -38,9 +38,18 @@ jobs:
             echo 'Object.freeze(FIREBASE_CONFIG);'
           } > config/config.js
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Deploy Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_FACESCAN_ED497 }}
           channelId: live
           projectId: facescan-ed497
+
+      - name: Deploy Firestore Rules
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_FACESCAN_ED497 }}' > /tmp/sa.json
+          npx firebase-tools@latest deploy --only firestore:rules --project facescan-ed497
+          rm /tmp/sa.json
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
