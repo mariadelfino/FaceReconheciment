@@ -117,9 +117,8 @@ const App = (() => {
     state.azureFaceEndpoint = ENV.AZURE_FACE_ENDPOINT || "";
     state.faceCheckKey      = ENV.FACECHECK_API_KEY   || "";
 
-    try { await testGeminiKey(); }
-    catch (err) {
-      showError("Falha na conexão com Gemini: " + err.message);
+    if (!state.geminiKey) {
+      showError("GEMINI_API_KEY não encontrada em config/config.js");
       btn.disabled = false; setButtonState("start-btn", "bi bi-play-circle", "INICIAR SISTEMA"); return;
     }
     setDot("api-dot", true);
@@ -372,22 +371,6 @@ const App = (() => {
   }
 
   /* ── Google Gemini API + Search Grounding ─────────────────── */
-  async function testGeminiKey() {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: "OK" }] }],
-        generationConfig: { maxOutputTokens: 5 },
-      }),
-    });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}));
-      throw new Error(e?.error?.message || "HTTP " + res.status);
-    }
-  }
-
   async function analyzeWithGeminiSearch(base64, faceItems, localMatch = null) {
     let webContext = "";
     if (faceItems && faceItems.length > 0) {
@@ -665,53 +648,66 @@ RETORNE APENAS JSON VÁLIDO SEM MARKDOWN:
     return personId;
   }
 
-  // Compara rosto atual com banco local usando Gemini Vision (independente do Azure)
+  // Compara rosto atual com todo o banco local em UMA única chamada ao Gemini
   async function identifyFromLocalDB(currentB64) {
     const db = await FirebaseDB.loadAll();
     if (db.length === 0) return null;
     if (!state.geminiKey) return null;
 
-    log("Comparando rosto com banco local (" + db.length + " cadastro(s))...", "ok");
+    const candidates = db.filter(p => p.imageData);
+    if (candidates.length === 0) return null;
 
-    for (const person of db) {
-      if (!person.imageData) continue;
-      try {
-        const storedB64 = person.imageData.split(",")[1];
-        if (!storedB64) continue;
+    log("Comparando rosto com banco local (" + candidates.length + " cadastro(s))...", "ok");
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: 'Compare as duas fotos de rosto. A primeira é o alvo atual, a segunda é do banco de dados. São a MESMA pessoa? Responda SOMENTE com JSON sem markdown: {"same":true,"confidence":85}' },
-                { inline_data: { mime_type: "image/jpeg", data: currentB64 } },
-                { inline_data: { mime_type: "image/jpeg", data: storedB64 } },
-              ],
-            }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 256, thinkingConfig: { thinkingBudget: 0 } },
-          }),
-        });
+    try {
+      const parts = [
+        { text:
+          "A primeira imagem é o rosto alvo. As imagens seguintes são cadastros do banco de dados, cada uma precedida por seu índice (0, 1, 2...). " +
+          "Analise se o rosto alvo corresponde a algum dos cadastros. " +
+          "Responda SOMENTE com JSON sem markdown: {\"match_index\": 0, \"confidence\": 85} ou {\"match_index\": -1, \"confidence\": 0} se nenhum bater."
+        },
+        { inline_data: { mime_type: "image/jpeg", data: currentB64 } },
+      ];
 
-        if (!res.ok) continue;
-        const data = await res.json();
-        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-        const m = text.match(/\{[\s\S]*?\}/);
-        if (!m) continue;
-
-        const result = JSON.parse(m[0]);
-        const conf = result.confidence ?? 0;
-        log("Banco local — " + person.name + ": " + (result.same ? "MESMA PESSOA" : "diferente") + " (" + conf + "%)", result.same ? "ok" : "");
-
-        if (result.same && conf >= 70) {
-          return { ...person, matchConfidence: conf / 100 };
+      candidates.forEach((person, i) => {
+        const b64 = person.imageData.split(",")[1];
+        if (b64) {
+          parts.push({ text: `Cadastro ${i} — ${person.name}:` });
+          parts.push({ inline_data: { mime_type: "image/jpeg", data: b64 } });
         }
-      } catch (_) { continue; }
-    }
+      });
 
-    return null;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 64, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+      const m = text.match(/\{[\s\S]*?\}/);
+      if (!m) return null;
+
+      const result = JSON.parse(m[0]);
+      const idx = result.match_index ?? -1;
+      const conf = result.confidence ?? 0;
+
+      if (idx >= 0 && idx < candidates.length && conf >= 70) {
+        const person = candidates[idx];
+        log("Banco local — " + person.name + " reconhecido! (" + conf + "%)", "ok");
+        return { ...person, matchConfidence: conf / 100 };
+      }
+
+      log("Banco local — nenhuma correspondência encontrada", "");
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   function getTopEmotion(emotions) {
